@@ -1,0 +1,8 @@
+# 1. Goal（發送的目標：數到多少？）
+int32 target_number
+---
+# 2. Result（最終結果：總共數到了多少？）
+int32 reached_number
+---
+# 3. Feedback（即時回報：當前數到多少？）
+int32 current_number
