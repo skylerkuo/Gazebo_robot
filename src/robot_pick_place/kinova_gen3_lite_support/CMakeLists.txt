@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.8)
+project(kinova_gen3_lite_support)
+find_package(ament_cmake REQUIRED)
+install(DIRECTORY config launch urdf worlds rviz patches DESTINATION share/${PROJECT_NAME})
+install(FILES README.md LICENSE upstream.repos DESTINATION share/${PROJECT_NAME})
+ament_package()

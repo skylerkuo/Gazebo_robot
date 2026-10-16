@@ -1,0 +1,32 @@
+mtc_node:
+  ros__parameters:
+    execute: false
+    max_solutions: 25
+    approach_object_min_dist: 0.0015
+    approach_object_max_dist: 0.3
+    lift_object_min_dist: 0.005
+    lift_object_max_dist: 0.3
+    lower_object_min_dist: 0.005
+    lower_object_max_dist: 0.4
+    move_to_pick_timeout: 10.0
+    move_to_place_timeout: 10.0
+    grasp_pose_angle_delta: 0.1309
+    grasp_pose_max_ik_solutions: 10
+    grasp_pose_min_solution_distance: 0.8
+    place_pose_max_ik_solutions: 10
+    cartesian_max_velocity_scaling: 1.0
+    cartesian_max_acceleration_scaling: 1.0
+    cartesian_step_size: 0.00025
+    approach_object_direction_z: 1.0
+    lift_object_direction_z: 1.0
+    lower_object_direction_z: -1.0
+    retreat_direction_z: -1.0
+    place_pose_z_offset_factor: 0.5
+    retreat_min_distance: 0.025
+    retreat_max_distance: 0.25
+    scene_source: known
+    scene_service_name: /perception/get_planning_scene
+    service_timeout: 30.0
+    gripper_strategy: named_pose
+    planning_pipeline: ompl
+    planner_id: RRTConnectkConfigDefault

@@ -1,0 +1,42 @@
+mtc_node:
+  ros__parameters:
+    object_name: target_cylinder
+    object_type: cylinder
+    object_reference_frame: base_link
+    object_dimensions:
+    - 0.35
+    - 0.02
+    object_pose:
+    - 0.35
+    - 0.15
+    - 0.175
+    - 0.0
+    - 0.0
+    - 0.0
+    support_surface_name: support_surface
+    support_surface_reference_frame: base_link
+    support_surface_dimensions:
+    - 0.6
+    - 0.8
+    - 0.01
+    support_surface_pose:
+    - 0.45
+    - 0.0
+    - -0.005
+    - 0.0
+    - 0.0
+    - 0.0
+    place_pose:
+    - 0.35
+    - -0.15
+    - 0.0
+    - 0.0
+    - 0.0
+    - 0.0
+    max_solutions: 5
+    cartesian_step_size: 0.002
+    approach_object_max_dist: 0.12
+    lift_object_max_dist: 0.08
+    lower_object_max_dist: 0.08
+    retreat_max_distance: 0.08
+    grasp_pose_min_solution_distance: 0.2

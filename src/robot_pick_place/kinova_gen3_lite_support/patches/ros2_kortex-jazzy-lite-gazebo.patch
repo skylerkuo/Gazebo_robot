@@ -1,0 +1,26 @@
+diff --git a/kortex_description/arms/gen3_lite/6dof/urdf/kortex.ros2_control.xacro b/kortex_description/arms/gen3_lite/6dof/urdf/kortex.ros2_control.xacro
+index 784939e..0a92255 100644
+--- a/kortex_description/arms/gen3_lite/6dof/urdf/kortex.ros2_control.xacro
++++ b/kortex_description/arms/gen3_lite/6dof/urdf/kortex.ros2_control.xacro
+@@ -163,7 +163,7 @@
+        <!-- </xacro:unless> -->
+       <!-- </xacro:unless> -->
+       <!--<xacro:if value="${moveit_active}">-->
+-      <xacro:unless value="${use_fake_hardware}">
++      <xacro:unless value="${use_fake_hardware or sim_gazebo}">
+         <joint name="${prefix}right_finger_bottom_joint">
+           <command_interface name="position"/>
+           <state_interface name="position"/>
+diff --git a/kortex_description/grippers/gen3_lite_2f/urdf/gen3_lite_2f.ros2_control.xacro b/kortex_description/grippers/gen3_lite_2f/urdf/gen3_lite_2f.ros2_control.xacro
+index dfe059a..2e276e0 100644
+--- a/kortex_description/grippers/gen3_lite_2f/urdf/gen3_lite_2f.ros2_control.xacro
++++ b/kortex_description/grippers/gen3_lite_2f/urdf/gen3_lite_2f.ros2_control.xacro
+@@ -31,7 +31,7 @@
+                     <param name="trigger_joint_command_threshold">0.02</param>
+                 </xacro:if>
+                 <xacro:if value="${sim_gazebo}">
+-                    <plugin>gz_ros2_control/GzSimSystem</plugin>
++                    <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+                 </xacro:if>
+                 <xacro:if value="${use_fake_hardware}">
+                     <plugin>mock_components/GenericSystem</plugin>

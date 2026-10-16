@@ -1,0 +1,74 @@
+<?xml version='1.0' encoding='utf-8'?>
+<robot name="gen3_lite_gen3_lite_2f">
+  <group name="arm">
+    <joint name="tool_frame_joint" />
+    <joint name="joint_1" />
+    <joint name="joint_2" />
+    <joint name="joint_3" />
+    <joint name="joint_4" />
+    <joint name="joint_5" />
+    <joint name="joint_6" />
+    <joint name="end_effector" />
+  </group>
+  <group name="gripper">
+    <joint name="gripper_base_joint" />
+    <joint name="left_finger_bottom_joint" />
+    <joint name="left_finger_tip_joint" />
+    <joint name="right_finger_bottom_joint" />
+    <joint name="right_finger_tip_joint" />
+  </group>
+  <!-- MTC Connect merges arm and gripper trajectories; execution needs a group covering both. -->
+  <group name="arm_with_gripper">
+    <group name="arm" />
+    <group name="gripper" />
+  </group>
+  <end_effector name="end_effector" parent_link="end_effector_link" group="gripper" parent_group="arm" />
+  <disable_collisions link1="arm_link" link2="base_link" reason="Never" />
+  <disable_collisions link1="arm_link" link2="forearm_link" reason="Adjacent" />
+  <disable_collisions link1="arm_link" link2="lower_wrist_link" reason="Never" />
+  <disable_collisions link1="arm_link" link2="shoulder_link" reason="Adjacent" />
+  <disable_collisions link1="base_link" link2="shoulder_link" reason="Adjacent" />
+  <disable_collisions link1="forearm_link" link2="gripper_base_link" reason="Never" />
+  <disable_collisions link1="forearm_link" link2="left_finger_dist_link" reason="Never" />
+  <disable_collisions link1="forearm_link" link2="left_finger_prox_link" reason="Never" />
+  <disable_collisions link1="forearm_link" link2="lower_wrist_link" reason="Adjacent" />
+  <disable_collisions link1="forearm_link" link2="right_finger_dist_link" reason="Never" />
+  <disable_collisions link1="forearm_link" link2="right_finger_prox_link" reason="Never" />
+  <disable_collisions link1="forearm_link" link2="shoulder_link" reason="Never" />
+  <disable_collisions link1="forearm_link" link2="upper_wrist_link" reason="Never" />
+  <disable_collisions link1="gripper_base_link" link2="left_finger_dist_link" reason="Never" />
+  <disable_collisions link1="gripper_base_link" link2="left_finger_prox_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_base_link" link2="lower_wrist_link" reason="Never" />
+  <disable_collisions link1="gripper_base_link" link2="right_finger_dist_link" reason="Never" />
+  <disable_collisions link1="gripper_base_link" link2="right_finger_prox_link" reason="Adjacent" />
+  <disable_collisions link1="gripper_base_link" link2="upper_wrist_link" reason="Adjacent" />
+  <disable_collisions link1="left_finger_dist_link" link2="left_finger_prox_link" reason="Adjacent" />
+  <disable_collisions link1="left_finger_dist_link" link2="lower_wrist_link" reason="Never" />
+  <disable_collisions link1="left_finger_dist_link" link2="right_finger_dist_link" reason="Never" />
+  <disable_collisions link1="left_finger_dist_link" link2="right_finger_prox_link" reason="Never" />
+  <disable_collisions link1="left_finger_dist_link" link2="upper_wrist_link" reason="Never" />
+  <disable_collisions link1="left_finger_prox_link" link2="lower_wrist_link" reason="Never" />
+  <disable_collisions link1="left_finger_prox_link" link2="right_finger_dist_link" reason="Never" />
+  <disable_collisions link1="left_finger_prox_link" link2="right_finger_prox_link" reason="Never" />
+  <disable_collisions link1="left_finger_prox_link" link2="upper_wrist_link" reason="Never" />
+  <disable_collisions link1="lower_wrist_link" link2="right_finger_dist_link" reason="Never" />
+  <disable_collisions link1="lower_wrist_link" link2="right_finger_prox_link" reason="Never" />
+  <disable_collisions link1="lower_wrist_link" link2="upper_wrist_link" reason="Adjacent" />
+  <disable_collisions link1="right_finger_dist_link" link2="right_finger_prox_link" reason="Adjacent" />
+  <disable_collisions link1="right_finger_dist_link" link2="upper_wrist_link" reason="Never" />
+  <disable_collisions link1="right_finger_prox_link" link2="upper_wrist_link" reason="Never" />
+  <group_state name="home" group="arm">
+    <joint name="joint_1" value="0.0" />
+    <joint name="joint_2" value="0.0" />
+    <joint name="joint_3" value="0.0" />
+    <joint name="joint_4" value="0.0" />
+    <joint name="joint_5" value="0.0" />
+    <joint name="joint_6" value="0.0" />
+  </group_state>
+  <group_state name="open" group="gripper">
+    <joint name="right_finger_bottom_joint" value="0.0" />
+  </group_state>
+  <group_state name="closed" group="gripper">
+    <joint name="right_finger_bottom_joint" value="0.7" />
+  </group_state>
+</robot>

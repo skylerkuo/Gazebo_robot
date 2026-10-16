@@ -3,6 +3,9 @@ build/
 install/
 log/
 
+# Official Kinova source checkout; restore via kinova_gen3_lite_support/upstream.repos and its patch.
+/src/robot_pick_place/ros2_kortex/
+
 # Python
 __pycache__/
 *.py[cod]

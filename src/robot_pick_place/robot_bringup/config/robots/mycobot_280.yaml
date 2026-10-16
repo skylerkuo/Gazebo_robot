@@ -1,0 +1,58 @@
+schema_version: 1
+robot_id: mycobot_280
+simulation:
+  package: mycobot_gazebo
+  launch_file: mycobot.gazebo.launch.py
+  world_file: pick_and_place_demo.world
+  # Matches the existing robot.sh world/base convention, not the vendor launch's z=0.05 default.
+  arguments: {x: '0.0', y: '0.0', z: '0.0', roll: '0.0', pitch: '0.0', yaw: '0.0'}
+robot_description:
+  package: mycobot_description
+  launch_file: robot_state_publisher.launch.py
+  xacro_file: urdf/robots/mycobot_280.urdf.xacro
+  mappings: {robot_name: mycobot_280, prefix: '', flange_link: link6_flange, add_world: 'true'}
+moveit:
+  package: mycobot_moveit_config
+  launch_file: move_group.launch.py
+  config_argument: moveit_config_file
+  robot_name: mycobot_280
+  files:
+    semantic: config/mycobot_280/mycobot_280.srdf
+    kinematics: config/mycobot_280/kinematics.yaml
+    joint_limits: config/mycobot_280/joint_limits.yaml
+    controllers: config/mycobot_280/moveit_controllers.yaml
+    ros2_controllers: config/mycobot_280/ros2_controllers.yaml
+    controllers_template: config/mycobot_280/ros2_controllers_template.yaml
+    cartesian_limits: config/mycobot_280/pilz_cartesian_limits.yaml
+  pipelines:
+    ompl: config/ompl_planning.yaml
+    pilz_industrial_motion_planner: config/pilz_industrial_motion_planner_planning.yaml
+    stomp: config/stomp_planning.yaml
+planning:
+  arm_group: arm
+  gripper_group: gripper
+  end_effector: gripper
+  ik_frame: link6_flange
+  base_frame: base_link
+  home_pose: home
+  open_pose: open
+  close_pose: half_closed
+  grasp_frame_transform: [0.0, 0.0, 0.096, 1.5708, 0.0, 0.0]
+  pipeline: ompl
+  planner_id: RRTConnectkConfigDefault
+execution:
+  state_controller: joint_state_broadcaster
+  controller_manager: /controller_manager
+  arm_controller: arm_controller
+  gripper_controller: gripper_action_controller
+  gripper_strategy: named_pose
+perception:
+  point_cloud_topic: /camera_head/depth/color/points
+  rgb_image_topic: /camera_head/color/image_raw
+  target_frame: base_link
+  service_name: /perception/get_planning_scene
+  # Keep the existing detector/crop tuning as a robot/scene override, not generic assumptions.
+  params: {package: robot_bringup, file: config/scenes/mycobot_perception_settings.yaml}
+scene:
+  known: {package: robot_bringup, file: config/scenes/mycobot_known.yaml}
+  perception: {package: robot_bringup, file: config/scenes/mycobot_perception.yaml}
