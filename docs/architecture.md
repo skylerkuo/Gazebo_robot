@@ -2,8 +2,33 @@
 
 目前使用相同的 Profile 契約接入 myCobot 280 與 Kinova Gen3 Lite（6DOF、Gen3 Lite 2F）。
 Kinova 透過 `kinova_gen3_lite_support` 提供模型／MoveIt／Gazebo 設定與 Launch wrapper；
-`robot_task_core`、`robot_perception`、`robot_task_interfaces` 本次均未修改。
+初次 Kinova 整合未修改 `robot_task_core`、`robot_perception`、`robot_task_interfaces`。
 詳見 [Kinova 整合文件](../src/robot_pick_place/kinova_gen3_lite_support/README.md)。
+
+後續新增可選 YOLOE 目標選擇器：`robot_perception` 內增加 Python 模組，
+原本 C++ PCL 演算法、MTC 與服務格式仍沿用。
+
+```mermaid
+flowchart LR
+  Camera[原 RGBD 相機] --> PCL[既有 PCL 場景重建]
+  PCL -->|geometry：原尺寸匹配結果| Service[通用 GetPlanningScene]
+  PCL -->|ai：完整場景及 RGBD| AI[YOLOE 遮罩與 3D 物件對應]
+  AI -->|只替換目標 ID，保留所有碰撞物件| Service
+  Service --> MTC[同一個 robot_task_core]
+```
+
+`perception_method:=geometry` 時僅原 PCL 服務對外提供通用端點。
+`ai` 時 PCL 改用私有 `/perception/get_planning_scene/geometry`，
+Python 選擇器提供原 `/perception/get_planning_scene`，MTC 不需知道目標是如何選出的。
+AI 載入成功才發布服務，readiness 仍等待同一個公開端點；AI 節點退出時停止此次 launch。
+可用參數與資料要求見 [AI 辨識模式](ai_perception.md)。
+
+AI 預設為互動模式：`pick_console` 只負責啟動既有 launch、讀取文字及呼叫
+`/pick_place/run`（`RunPickPlace`），MTC 保留原 stage 與 execute 邏輯。
+MTC 每次請求將 `target_label` 傳至 `GetPlanningScene`，AI 動態更新提示；
+幾何後端只在請求後訂閱並擷取新的 RGB／點雲，完成後停止訂閱。
+MTC 每次重建 Task，更新自己管理的碰撞物件、保留外部障礙物，並拒絕重疊執行。
+`interactive:=false` 保留單次模式，幾何模式仍依原方式啟動。
 
 ## Phase 0：基準
 

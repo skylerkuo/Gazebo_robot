@@ -2,6 +2,7 @@
 import tempfile
 import subprocess
 import unittest
+from pathlib import Path
 from xml.etree import ElementTree as ET
 
 import yaml
@@ -10,6 +11,31 @@ from robot_bringup.profile import load_profile
 
 
 class KinovaProfileContract(unittest.TestCase):
+    def test_collection_bin_matches_world_and_stays_outside_pick_crop(self):
+        _, task, perception, _, _ = self.prepare('perception')
+        self.assertTrue(task['drop_into_bin'])
+        world = ET.parse(Path(__file__).resolve().parents[1] /
+                         'src/robot_pick_place/kinova_gen3_lite_support/worlds/pick_place.sdf')
+        names = {model.attrib['name'] for model in world.findall('.//model')}
+        self.assertNotIn('apple', names)
+        self.assertNotIn('target_cylinder', names)
+        self.assertNotIn('small_carton', names)
+        self.assertTrue({'plastic_bottle', 'tennis_ball', 'red_mug', task['object_name']} <= names)
+        model = world.find(".//model[@name='collection_bin']")
+        pose = list(map(float, model.findtext('pose').split()))
+        self.assertEqual(pose, task['bin_pose'])
+        collisions = model.findall('link/collision')
+        self.assertEqual(len(collisions), 5)
+        floor = model.find("link/collision[@name='floor']")
+        dims = list(map(float, floor.findtext('geometry/box/size').split()))
+        self.assertEqual(dims[:2], task['bin_dimensions'][:2])
+        self.assertEqual(dims[2], task['bin_wall_thickness'])
+        self.assertLess(pose[1] + task['bin_dimensions'][1] / 2, perception['crop_min_y'])
+        self.assertGreater(task['place_pose'][2], pose[2] + task['bin_dimensions'][2])
+        _, known, _, _, _ = self.prepare('known')
+        for name in ('bin_pose', 'bin_dimensions', 'bin_wall_thickness', 'place_pose'):
+            self.assertEqual(known[name], task[name])
+
     def setUp(self):
         self.profile = load_profile('kinova_gen3_lite')
         self.runtime = tempfile.TemporaryDirectory()
@@ -62,7 +88,8 @@ class KinovaProfileContract(unittest.TestCase):
         self.assertIsNotNone(ET.fromstring(converted.stdout).find('.//sensor'))
         self.assertEqual(perception['target_frame'], task['world_frame'])
         self.assertIsNotNone(robot.find(f"link[@name='{task['gripper_frame']}']"))
-        self.assertEqual(task['object_dimensions'], [0.35, 0.02])
+        self.assertEqual(task['object_dimensions'], [0.1, 0.02])
+        self.assertEqual(task['object_name'], 'drink_can')
 
     def test_execution_group_covers_arm_and_gripper_trajectory(self):
         config, _, _, urdf, _ = self.prepare()

@@ -47,13 +47,18 @@
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/filters/crop_box.h>
+#include <chrono>
+#include <cmath>
+#include <condition_variable>
+#include <mutex>
 
 class GetPlanningSceneServer : public rclcpp::Node {
  public:
   GetPlanningSceneServer(const rclcpp::NodeOptions& options = rclcpp::NodeOptions())
       : Node("robot_perception_server", options) {
     declareParameters();
-    createSubscribers();
+    capture_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+    if (!get_parameter("capture_on_request").as_bool()) createSubscribers();
     createService();
     tf_buffer_ = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -149,6 +154,7 @@ class GetPlanningSceneServer : public rclcpp::Node {
 
   // Service
   rclcpp::Service<robot_task_interfaces::srv::GetPlanningScene>::SharedPtr service;
+  rclcpp::CallbackGroup::SharedPtr capture_group_;
 
   // Latest data storage
   sensor_msgs::msg::PointCloud2::SharedPtr latest_point_cloud;
@@ -169,6 +175,8 @@ class GetPlanningSceneServer : public rclcpp::Node {
     };
 
     declare_parameter("service_name", "/perception/get_planning_scene", "Scene service name (generic interface)");
+    declare_parameter("capture_on_request", false, "Subscribe and capture fresh RGB/depth only after a request");
+    declare_parameter("capture_timeout", 5.0, "Wall-time limit for a fresh synchronized RGB/depth pair");
     // Declare parameters with default values and descriptions
     declare_parameter("point_cloud_topic", "/camera/depth/points", "Topic name for incoming point cloud data");
     declare_parameter("rgb_image_topic", "/camera/color/image_raw", "Topic name for incoming RGB image data");
@@ -350,6 +358,55 @@ class GetPlanningSceneServer : public rclcpp::Node {
 
     RCLCPP_INFO(this->get_logger(), "Subscribed to point cloud topic: %s", point_cloud_topic.c_str());
     RCLCPP_INFO(this->get_logger(), "Subscribed to RGB image topic: %s", rgb_image_topic.c_str());
+  }
+
+  bool captureFreshPair() {
+    struct Capture {
+      std::mutex mutex;
+      std::condition_variable condition;
+      sensor_msgs::msg::PointCloud2::SharedPtr cloud;
+      sensor_msgs::msg::Image::SharedPtr image;
+    };
+    auto state = std::make_shared<Capture>();
+    const auto started = now().nanoseconds();
+    latest_point_cloud.reset();
+    latest_rgb_image.reset();
+    rclcpp::SubscriptionOptions options;
+    options.callback_group = capture_group_;
+    auto cloud = create_subscription<sensor_msgs::msg::PointCloud2>(
+        point_cloud_topic, rclcpp::SensorDataQoS().keep_last(1),
+        [state, started](sensor_msgs::msg::PointCloud2::SharedPtr msg) {
+          if (msg->data.empty() || rclcpp::Time(msg->header.stamp).nanoseconds() <= started) return;
+          std::lock_guard<std::mutex> lock(state->mutex);
+          state->cloud = msg;
+          state->condition.notify_one();
+        }, options);
+    auto image = create_subscription<sensor_msgs::msg::Image>(
+        rgb_image_topic, rclcpp::SensorDataQoS().keep_last(1),
+        [state, started](sensor_msgs::msg::Image::SharedPtr msg) {
+          if (msg->data.empty() || rclcpp::Time(msg->header.stamp).nanoseconds() <= started) return;
+          std::lock_guard<std::mutex> lock(state->mutex);
+          state->image = msg;
+          state->condition.notify_one();
+        }, options);
+    std::unique_lock<std::mutex> lock(state->mutex);
+    const bool ready = state->condition.wait_for(lock,
+        std::chrono::duration<double>(get_parameter("capture_timeout").as_double()), [&] {
+          return state->cloud && state->image &&
+              std::abs(rclcpp::Time(state->cloud->header.stamp).seconds() -
+                       rclcpp::Time(state->image->header.stamp).seconds()) <= 0.15;
+        });
+    if (ready) {
+      latest_point_cloud = state->cloud;
+      latest_rgb_image = state->image;
+      RCLCPP_INFO(get_logger(), "[Capture] Fresh RGB/depth after request: start=%ld cloud=%ld image=%ld",
+                  started, rclcpp::Time(latest_point_cloud->header.stamp).nanoseconds(),
+                  rclcpp::Time(latest_rgb_image->header.stamp).nanoseconds());
+    } else {
+      RCLCPP_ERROR(get_logger(), "[Capture] Fresh RGB/depth timed out; previous frames will not be reused");
+    }
+    // These subscriptions live only for this capture. PCL uses the frozen pair.
+    return ready;
   }
 
   void createService() {
@@ -853,6 +910,7 @@ class GetPlanningSceneServer : public rclcpp::Node {
      *                                                  *
      ***************************************************/
     response->success = false;
+    if (get_parameter("capture_on_request").as_bool() && !captureFreshPair()) return;
 
     /****************************************************
      *                                                  *

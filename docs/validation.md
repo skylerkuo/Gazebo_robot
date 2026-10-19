@@ -1,7 +1,187 @@
 # 實際驗證結果
 
-日期：2026-10-16（Asia/Taipei）。目前驗證 myCobot 280 與 Kinova Gen3 Lite。
+日期：2026-10-19（Asia/Taipei）。目前驗證 myCobot 280 與 Kinova Gen3 Lite。
 以下保留各階段的驗證紀錄；最新結果位於最前方小節，歷史未測狀態以最新結果為準。
+
+## 紙盒換成紅色馬克杯（2026-10-19）
+
+移除 small_carton，新增 red_mug，杯身直徑 44mm、高 70mm，位置 `[0.28,-0.25,0.035]`。
+紅色杯身、深色杯口與把手均由 SDF primitive 建立；物理碰撞為杯身圓柱，把手僅為視覺。
+不包含液體或抓把手功能；其他物品、Profile、AI 閾值、PCL／MTC 均未改動。
+
+- Passed：support 套件增量建置 `/tmp/kinova-mug-build.log`，`gz sdf -k` 回報 Valid。
+- Passed：21 項離線測試 `/tmp/kinova-mug-unit.log`，含紙盒移除與馬克杯存在的場景契約。
+- Passed：隔離 ROS domain 216 的 headless CPU Gazebo 實際畫面 `/tmp/kinova-mug-camera.png`。
+  `red cup` 信心 0.251、`red mug` 0.147，皆選中紅杯；泛稱 `cup`、`mug` 與 `coffee mug` 未檢出。
+  記錄 `/tmp/kinova-mug-prompts.log`；這是單張量測，不保證所有視角或擺放。
+- Passed：終端輸入 `red mug`，AI confidence=0.147、3D depth_overlap=0.921；
+  完整 MTC 規劃與軌跡執行成功，`/tmp/kinova-mug-demo.log`。
+- Passed：Gazebo 真實位姿 `[0.25472,-0.51458,0.04500]`，杯身落在收集箱內，
+  `/tmp/kinova-mug-poses.txt`。辨識驗證與真實投放均通過；GUI／CUDA 未重測。
+- 退出測試時仍出現既有 MoveIt 關閉階段 segmentation fault（exit -11），發生在任務成功與位姿確認之後；此次未修正該既有問題。
+
+## Kinova 更換辨識測試物品（2026-10-16）
+
+移除 apple 與 target_cylinder；保留橘子、飲料罐、紙盒、收集箱。
+新增 plastic_bottle（綠色瓶身、瓶頸、藍蓋、淺色標籤，總高 120mm、主體直徑 36mm）與
+tennis_ball（黃綠色球體、白色曲線接縫，直徑 52mm）。均由 SDF primitive 建立，無額外資產下載。
+known／geometry 預設目標同步改為現存 drink_can，沒有使用已刪除物品的目標座標。
+
+- Passed：兩個整合套件增量建置，`/tmp/kinova-recognizable-props-build.log`。
+- Passed：SDF Valid，`/tmp/kinova-recognizable-props-sdf.log`；21 項離線測試，
+  `/tmp/kinova-new-props-final-unit.log`，包含已刪除模型不存在、新模型存在、預設目標與實際場景一致。
+- Passed：實際 Gazebo RGB 圖片 `/tmp/kinova-new-props-camera.png` 上的 YOLOE 推論。
+  `green plastic bottle` 正確選中綠瓶（0.616），`tennis ball` 選中網球（0.387），
+  `drink can` 選中藍色罐（0.817）。文字結果 `/tmp/kinova-new-props-recognition.log`、
+  `/tmp/kinova-new-bottle-prompts.log`；對應標註影像 `/tmp/kinova-new-props-*.png`。
+
+`bottle`／`water bottle` 泛稱在此畫面會優先選到藍色飲料罐，不能宣稱所有 bottle 提示皆能區分新綠瓶。
+此次未改 AI 閾值、PCL／MTC 演算法、抓取角度或 myCobot。
+
+初次綠瓶使用分段碰撞模型時，雖然軌跡返回成功，Gazebo 位姿顯示瓶子彈飛，該次不算物理抓放通過。
+已改為與 PCL primitive 一致的保守圓柱包覆碰撞體，慣性與其尺寸一致；控制器與抓取流程未放寬。
+初次結果保留 `/tmp/kinova-new-props-initial-demo.log`、`/tmp/kinova-new-props-initial-execute-result.log`。
+
+- Passed（最終碰撞模型）：同一終端依序 `green plastic bottle`、`tennis ball`，
+  兩次 3D 對應、完整 MTC 規劃與軌跡執行成功，`/tmp/kinova-new-props-demo.log`、`.cli`、
+  `/tmp/kinova-new-props-execute-result.log`。綠瓶 confidence=0.616、depth_overlap=0.998；
+  網球 confidence=0.470、depth_overlap=1.000。
+- Passed：Gazebo 真實位置確認綠瓶 `[0.25382,-0.51796,0.07000]`、
+  網球 `[0.37131,-0.58205,0.03600]`，均落在收集箱內；已移除模型在模擬中不存在。
+  記錄 `/tmp/kinova-new-props-final-poses.{txt,json}`。
+- Passed：CLI 核心節點唯一性、Controller／服務／Action；測試完成後 quit 清理自己的模擬。
+- Passed：更新後預設 drink_can 的 known 模式完整規劃與 CLI 回歸，
+  `/tmp/kinova-new-props-known.log`、`.cli`、`-result.log`。
+
+以上為單次 headless CPU 測試；未宣稱所有提示詞／視角皆可可靠辨識，GUI／CUDA 未重測。
+
+## Kinova 開口收集箱投放（2026-10-16）
+
+場景新增外尺寸 32×22×10cm 的開口箱，底面中心 `[0.25,-0.52,0]`。
+物品底面在 `[0.25,-0.52,0.18]` 釋放，跳過 lower object，由重力落入箱內。
+箱底與四壁均有 Gazebo 碰撞形狀及相同的 MoveIt 五片 BOX；保留原抓取角度與其餘 MTC stage。
+myCobot 的 drop_into_bin 預設 false，原放置方式保留。
+
+- Passed：三個整合套件增量建置，`/tmp/kinova-bin-build.log`；21 項離線測試
+  `/tmp/kinova-bin-unit.log`；`gz sdf -k` Valid，`/tmp/kinova-bin-sdf.log`。
+- Passed：同一終端／同一 MTC 程序依序輸入 `drink can`、`apple`、`ball`，三次完整規劃、
+  控制器軌跡執行皆成功。`/tmp/kinova-bin-execute.log`、`.cli`、`-result.log`。
+- Passed：Gazebo 真實模型位姿確認飲料罐、蘋果與橘子均在箱內；
+  `/tmp/kinova-bin-final-poses.{txt,json}`。最終位置（m）：
+
+  | 物品 | x | y | z |
+  |---|---:|---:|---:|
+  | 飲料罐 | 0.25090 | -0.51267 | 0.06000 |
+  | 蘋果 | 0.37500 | -0.45817 | 0.03500 |
+  | 橘色球 | 0.32513 | -0.44601 | 0.03600 |
+
+- Passed：真實 MoveIt 服務中箱體五片 BOX 的尺寸與位姿皆逐一符合 SDF，投放後沒有 attached
+  object 或懸空釋放物件。剩下原長圓柱、紙盒、箱體與支撐面四個碰撞物件。
+- Passed：CLI 核心節點唯一性、Controller／服務／Action；測試後 quit 清理自己的模擬。
+- Passed：原長圓柱的 known 模式也能完成整個投放規劃，物品中心高度自動換算為 0.355m；
+  `/tmp/kinova-bin-known-plan.log`、`.cli`、`-result.log`。此項 execute=false，未宣稱圓柱物理投放成功。
+- Passed：myCobot 原 known 模式完整規劃及 CLI 回歸，
+  `/tmp/mycobot-bin-regression.log`、`.cli`、`-result.log`。
+
+目前箱子在抓取 crop 之外，箱內已收集物件不重建為待抓目標。
+尚未宣稱紙盒或原長圓柱的物理投放成功；箱子容量有限，未實作裝滿偵測或堆疊規劃。
+原 MoveIt 2.12.4 關閉崩潰仍存在，本次成功任務不代表該既有問題已修正；GUI／CUDA 未重測。
+
+最初箱體 visual／collision 同名的 SDF 檢查錯誤已更正，最終 SDF Valid。
+第一次檢查器誤將剩餘碰撞物件數量預期為 3，改成正確的 4 後，真實服務幾何檢查通過；
+原檢查輸出保留於 `/tmp/kinova-bin-execute-initial-check.log`。
+
+## AI 終端輸入、請求後取像與重複任務（2026-10-16）
+
+- Passed：`robot_task_interfaces`、`robot_perception`、`robot_task_core`、`robot_bringup`
+  建置，`/tmp/robot-interactive-build.log`；後續核心修正建置另見
+  `/tmp/robot-interactive-core-fix-build.log`、`/tmp/robot-interactive-client-reuse-build.log`。
+- Passed：20 項 Profile／模型／AI 對應檢查，`/tmp/robot-interactive-final-unit.log`；
+  9 項真實 MTC 無效設定／場景逾時／場景失敗檢查，`/tmp/robot-interactive-safety.log`。
+- Passed：真實 Kinova 模擬與 YOLOE 下，等待／空白輸入皆不觸發取像、YOLOE、PCL 或 MTC。
+  忙碌時第二筆請求被立即拒絕。`drink can` 完整規劃後，`purple helicopter` 辨識失敗，
+  接著 `drink can` 再完成一次完整規劃。三次取像的 RGB 與點雲時間戳均晚於各自請求。
+  `/tmp/kinova-ai-commands-final.log`、`.cli`、`-result.log`。最終版本重測已通過，
+  重用同一個場景 client，沒有重複 node name 警告。
+- Passed：感知服務沒有新畫面時會逾時；取得一組新畫面後，下一次沒有新畫面仍須逾時，
+  不重用前一組資料。真實 ROS 感知服務／模擬相機發布器檢查，`/tmp/robot-fresh-capture-check.log`。
+- Passed：透過真正 `pick_console` 終端 stdin，依序輸入 `drink can` → `apple` → `drink can`。
+  兩次飲料罐皆完整規劃及 Gazebo 執行成功，MTC 程序與模型只啟動一次；apple 規劃失敗後仍可接續。
+  `/tmp/kinova-ai-console-execute.log`、`.cli`、`-result.log`。測試入口：
+
+  ```bash
+  ros2 run robot_bringup pick_console --robot kinova_gen3_lite --execute \
+    --headless --no-rviz --log /tmp/kinova-ai-console-execute.log
+  ```
+
+- Passed：Gazebo `/world/default/pose/info` 顯示第一次執行後，真實罐子由
+  `[0.30,-0.02,0.05]` 移到 `[0.34646,-0.14383,0.05]`，接近原放置點 `[0.35,-0.15]`；
+  原長圓柱與其他物品位姿未變。記錄 `/tmp/kinova-ai-console-after-first-poses.txt`。
+- Passed：終端測試完成後輸入 `quit`，由入口清理自己啟動的模擬。
+- Passed：最終程式的原 Kinova 幾何飲料罐規劃、myCobot known 規劃及 CLI 檢查，
+  `/tmp/kinova-interactive-geometry-regression.log`、`/tmp/mycobot-interactive-regression.log`，
+  各有 `.cli` 與 `-result.log`。
+- Passed：`interactive=false` 的原單次 AI 完整規劃與 CLI 檢查，
+  `/tmp/kinova-interactive-one-shot-regression.log`、`.cli`、`-result.log`。
+
+apple 的 AI 辨識與 3D 對應成功（confidence=0.110、depth_overlap=1.000），
+但 `place pose IK (0/460)` 回報 `cylinder_0 - left_finger_dist_link` 碰撞：
+前一個罐子已占據固定放置點。此項不算 apple 抓放成功，也未自動更改放置點或放寬碰撞。
+保留使用者的 20° 抓取設定與原 MTC stage，未新增多物品自動排列功能。
+
+既有 MoveIt 2.12.4 關閉／執行期崩潰並未在此功能中修正；本次兩次飲料罐執行皆先成功，
+不能推論其他場景的既有崩潰已消失。GUI／CUDA 本次未重測。
+
+重現等待／busy／失敗重試／重複規劃測試：
+
+```bash
+python tests/check_ai_commands.py
+```
+
+## YOLOE／幾何匹配切換（2026-10-16）
+
+- Passed：`robot_perception`、`robot_bringup` 增量建置；`/tmp/robot-ai-integration-build.log`。
+- Passed：20 項 Profile／模型／AI 深度對應測試；`/tmp/robot-ai-final-unit-tests.log`。
+  包含 organized cloud 的像素位置、row padding、endianness、NaN、時間差、TF、
+  排除支撐面、唯一目標與歧義拒絕。
+- Passed：使用真實 Ultralytics Results 驗證每類最高信心選擇保留相同實例的 mask，空結果可處理。
+- Passed：Kinova 原幾何模式，飲料罐完整 Pick and Place 規劃與 CLI 檢查；
+  `/tmp/kinova-geometry-ai-regression.log`、`.cli`、`-result.log`。
+- Passed：myCobot 原 known 模式完整規劃與 CLI 檢查；
+  `/tmp/mycobot-ai-regression.log`、`.cli`、`-result.log`。
+- Passed：真實 Kinova Gazebo 相機 → YOLOE → 遮罩深度 → PCL 物件 → 同一個 MTC，
+  完整 Pick and Place 規劃與 CLI 節點／控制器／服務／Action 檢查；
+  `/tmp/kinova-ai-drink-can-plan.log`、`.cli`、`-result.log`。
+  `drink can` confidence=0.615，選中 cylinder_0，depth_overlap=1.000，保留 6 個碰撞物件；
+  MTC 更新目標尺寸為 `[0.100601,0.019040]`，並輸出 `Task planning succeeded`。
+- Passed：`scene_source:=known perception_method:=ai` 在啟動節點前拒絕，
+  `/tmp/robot-ai-invalid-launch.log`；獨立 `object_detect.py --help` 與 `git diff --check`。
+- Passed：真實 AI 服務以 `ai_confidence:=0.99` 拒絕飲料罐，回傳 success=false，
+  MTC 明確退出 code 1，沒有開始規劃或退回幾何目標；
+  `/tmp/kinova-ai-reject.log`、`-result.log`。ROS launch 在 Shutdown 事件後本身返回 0，
+  因此以 MTC 子程序狀態與服務結果判定；關閉時仍有既有 MoveIt exit -11。
+
+使用實際模型 `yoloe-26n-seg.pt`、CPU PyTorch 2.14.1、Ultralytics 8.4.178、NumPy 1.26.4。
+AI 依賴位於 `.venv`，權重／文字編碼器位於 `~/.cache/robot_perception/yoloe`。
+初次 AI 啟動曾因回呼命名覆蓋 rclpy Node.handle 而失敗，已改名 handle_scene，
+上述成功測試為修正後的重跑結果。
+
+提示詞影響零樣本辨識：同一張 Gazebo 圖片上 `can` 沒有結果，`drink can` 約 0.61、
+`soda can` 約 0.72、`cube` 約 0.61、`apple` 約 0.18，`orange` 沒有結果。
+這些僅是單張辨識結果，不等同水果／紙盒已能完成抓取規劃；目前完整 AI 規劃驗證對象為飲料罐。
+示意圖 `/tmp/kinova-ai-prompt-drink-can.png`，文字結果 `/tmp/robot-ai-prompts-check.log`。
+
+本次未更動使用者的抓取角度或任何 MTC stage，所有完整流程測試均 `execute=false`。
+**未驗證 AI 模式的 Gazebo 軌跡執行或物理夾持，也未重測 CUDA／GUI。**
+既有 MoveIt 2.12.4 執行／關閉崩潰未在此辨識整合中修正，詳見後續既有紀錄。
+
+重現成功測試（先 source ROS、workspace、`.venv/bin/activate`）：
+
+```bash
+python3 tests/run_demo_check.py --robot kinova_gen3_lite --scene-source perception \
+  --perception-method ai --ai-target-class "drink can" --timeout 240 \
+  --log /tmp/kinova-ai-drink-can-plan.log
+```
 
 ## 抓罐失敗：夾爪逾時與另一個 MoveIt 執行期崩潰
 

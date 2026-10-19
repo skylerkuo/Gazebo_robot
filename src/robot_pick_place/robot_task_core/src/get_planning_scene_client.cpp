@@ -37,7 +37,8 @@ GetPlanningSceneClient::GetPlanningSceneClient(const std::string& service_name, 
 }
 
 GetPlanningSceneClient::PlanningSceneResponse
-GetPlanningSceneClient::call_service(const std::string& target_shape, const std::vector<double>& target_dimensions)
+GetPlanningSceneClient::call_service(const std::string& target_shape, const std::vector<double>& target_dimensions,
+                                    const std::string& target_label)
 {
   PlanningSceneResponse response;
   response.success = false;
@@ -53,6 +54,7 @@ GetPlanningSceneClient::call_service(const std::string& target_shape, const std:
   auto request = std::make_shared<robot_task_interfaces::srv::GetPlanningScene::Request>();
   request->target_shape = target_shape;
   request->target_dimensions = target_dimensions;
+  request->target_label = target_label;
 
   // Send the request asynchronously
   auto result_future = client_->async_send_request(request);

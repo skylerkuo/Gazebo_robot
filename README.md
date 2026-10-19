@@ -4,6 +4,14 @@
 `robot_task_core`、`robot_bringup`，由 Robot Profile 提供機器人設定；原有
 `src/robot_pick_place/mycobot_ros2/` 套件與入口保留。
 
+Kinova 現可用 `perception_method:=geometry`（預設）或 `perception_method:=ai`
+選擇原本的形狀／尺寸匹配或 YOLOE 辨識；兩者共用同一套 MTC。
+AI 環境安裝、啟動指令與限制見 [AI 辨識模式](docs/ai_perception.md)。
+
+AI 可在終端逐次輸入物品名稱：`ros2 run robot_bringup pick_console --robot kinova_gen3_lite --execute`。
+每次輸入後才擷取 RGB／深度、辨識、規劃及執行，完成後繼續等待；省略 `--execute` 僅規劃。
+Kinova 現場景含開口收集箱，預設在箱口上方釋放物品，由重力落入箱內。
+
 原始碼整理在同一個 `src/robot_pick_place/` 資料夾：
 
 ```text
@@ -77,9 +85,10 @@ ros2 launch robot_bringup demo.launch.py \
 
 [Kinova 官方來源、相容修正、安裝與測試](src/robot_pick_place/kinova_gen3_lite_support/README.md)
 
-Kinova 場景另含簡化蘋果、橘子、飲料罐與小紙盒；預設仍抓原長圓柱。
-可用 `task_params_file` 指向 `robot_bringup/config/scenes/kinova_grasp_can.yaml` 改抓飲料罐，
-指令與尺寸見上述 Kinova 文件。新場景的原目標與飲料罐完整規劃均已驗證。
+Kinova 場景含綠色瓶子、黃綠色網球、橘子、飲料罐與紅色馬克杯；已移除蘋果、紅色長圓柱與紙盒。
+AI 建議輸入 `green plastic bottle`、`tennis ball`、`drink can`；幾何／known 模式預設抓飲料罐。
+仍可用 `task_params_file` 覆寫場景／任務參數，指令與尺寸見上述 Kinova 文件。
+各物品的辨識、規劃與物理執行結果以最新驗證紀錄為準。
 
 [架構、Profile 契約、舊入口、安裝與排錯](docs/architecture.md) ·
 [修改檔案清單](docs/changed_files.md) · [實際驗證結果](docs/validation.md)

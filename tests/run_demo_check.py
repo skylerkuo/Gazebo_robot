@@ -43,7 +43,7 @@ def cleanup_partition(partition):
     psutil.wait_procs(alive, timeout=3)
 
 
-def snapshot(env, path, source):
+def snapshot(env, path, source, method='geometry'):
     commands = [
         ['ros2', 'node', 'list', '--no-daemon', '--spin-time', '3'],
         ['ros2', 'control', 'list_controllers'],
@@ -61,6 +61,7 @@ def snapshot(env, path, source):
                 for node in ('/move_group', '/controller_manager', '/robot_state_publisher'):
                     assert names.count(node) == 1, (node, names)
                 assert ('/robot_perception_server' in names) == (source == 'perception'), names
+                assert ('/robot_ai_perception_server' in names) == (source == 'perception' and method == 'ai'), names
     print('Passed: CLI controllers/topics/services/actions and unique core node counts')
 
 
@@ -71,17 +72,25 @@ def main():
     parser.add_argument('--execute', action='store_true', help='Execute the full task in this isolated Gazebo test')
     parser.add_argument('--with-gui', action='store_true', help='Test Gazebo GUI and RViz as in the normal launch')
     parser.add_argument('--scene-source', default='known', choices=['known', 'perception'])
+    parser.add_argument('--perception-method', default='geometry', choices=['geometry', 'ai'])
+    parser.add_argument('--ai-target-class', default='drink can')
+    parser.add_argument('--ai-model', default='yoloe-26n-seg.pt')
+    parser.add_argument('--ai-device', default='cpu')
     parser.add_argument('--timeout', default=150.0, type=float)
     parser.add_argument('--log', default='/tmp/robot-demo-check.log')
     arguments = parser.parse_args()
     env = dict(os.environ, ROS_HOME='/tmp/robot-refactor-home', ROS_LOG_DIR='/tmp/robot-refactor-logs', ROS_DOMAIN_ID=str(170 + os.getpid() % 40),
                GZ_PARTITION=f'robot_refactor_{os.getpid()}')
     command = ['ros2', 'launch', 'robot_bringup', 'demo.launch.py', f'robot:={arguments.robot}',
-               f'scene_source:={arguments.scene_source}', f'execute:={str(arguments.execute).lower()}',
+               f'scene_source:={arguments.scene_source}', f'perception_method:={arguments.perception_method}',
+               f'execute:={str(arguments.execute).lower()}', 'interactive:=false',
                f'use_rviz:={str(arguments.with_gui).lower()}', f'headless:={str(not arguments.with_gui).lower()}',
                f'readiness_timeout:={min(arguments.timeout, 120.0)}']
     if arguments.task_params_file:
         command.append(f'task_params_file:={arguments.task_params_file}')
+    if arguments.perception_method == 'ai':
+        command.extend([f'ai_target_class:={arguments.ai_target_class}', f'ai_model:={arguments.ai_model}',
+                        f'ai_device:={arguments.ai_device}'])
     with open(arguments.log, 'w') as output:
         process = subprocess.Popen(command, env=env, stdout=output, stderr=subprocess.STDOUT,
                                    start_new_session=True)
@@ -91,7 +100,7 @@ def main():
                 log = Path(arguments.log).read_text(errors='replace')
                 completion = 'Task executed successfully' if arguments.execute else 'Execution skipped as per configuration'
                 if 'Task planning succeeded' in log and completion in log:
-                    snapshot(env, arguments.log, arguments.scene_source)
+                    snapshot(env, arguments.log, arguments.scene_source, arguments.perception_method)
                     print('Passed: complete demo plan and execution' if arguments.execute else
                           'Passed: complete demo plan; execute=false skipped execution')
                     return 0

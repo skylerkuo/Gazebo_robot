@@ -46,6 +46,7 @@
 #include <algorithm>
 #include <cmath>
 #include <future>
+#include <mutex>
 #include <set>
 #include <stdexcept>
 #include <thread>
@@ -64,6 +65,7 @@
 
 // Handling the GetPlanningScene service
 #include "robot_task_core/get_planning_scene_client.h"
+#include <robot_task_interfaces/srv/run_pick_place.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <sensor_msgs/msg/image.hpp>
 
@@ -144,15 +146,17 @@ public:
 
   void validateConfiguration();
   void doTask();
-  void setupPlanningScene();
+  void setupPlanningScene(const std::string& target_label = "");
+  void startCommandService();
 
 private:
   mtc::Task task_;
   mtc::Task createTask();
   void setupSceneFromKnownObjects();
-  void setupSceneFromPerception();
+  void setupSceneFromPerception(const std::string& target_label);
   void validateFrame(const std::string& frame, const std::string& parameter);
   void checkExecutionControllers();
+  void appendCollectionBin();
 
   void updateObjectParameters(const moveit_msgs::msg::CollisionObject& collision_object);
 
@@ -164,6 +168,10 @@ private:
   std::string target_object_id_;
   std::string support_surface_id_;
   bool scene_ready_ = false;
+  std::set<std::string> managed_scene_ids_;
+  std::mutex command_mutex_;
+  rclcpp::CallbackGroup::SharedPtr command_group_;
+  rclcpp::Service<robot_task_interfaces::srv::RunPickPlace>::SharedPtr command_service_;
 };
 
 /**
@@ -196,6 +204,8 @@ MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions& options)
   declare_parameter("support_surface_dimensions", std::vector<double>{}, "Support BOX [x,y,z]");
   declare_parameter("support_surface_pose", std::vector<double>{}, "Support center pose");
   declare_parameter("execute", false, "Whether to execute the planned task");
+  declare_parameter("interactive", false, "Wait for one RunPickPlace request per task");
+  declare_parameter("command_service_name", "/pick_place/run", "Repeated task command service");
   declare_parameter("max_solutions", 25, "Maximum number of solutions to compute");
 
   // Controller parameters
@@ -222,6 +232,10 @@ MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions& options)
   // Grasp and place parameters
   declare_parameter("grasp_frame_transform", std::vector<double>{}, "Transform from gripper frame to grasp frame [x, y, z, roll, pitch, yaw]");
   declare_parameter("place_pose", std::vector<double>{}, "Pose where the object should be placed [x, y, z, roll, pitch, yaw]");
+  declare_parameter("drop_into_bin", false, "Release above a collection bin instead of lowering onto a surface");
+  declare_parameter("bin_pose", std::vector<double>{}, "Bin bottom-center pose in world_frame");
+  declare_parameter("bin_dimensions", std::vector<double>{}, "Bin outer dimensions [x,y,z]");
+  declare_parameter("bin_wall_thickness", 0.01, "Bin floor/wall thickness");
 
   // Motion planning parameters
   declare_parameter("approach_object_min_dist", 0.0015, "Minimum approach distance to the object");
@@ -292,6 +306,20 @@ void MTCTaskNode::validateConfiguration()
       throw std::runtime_error(std::string("[Scene] ") + name + " requires xyz+rpy (6) or xyz+xyzw (7) finite values");
     if (values.size() == 7 && std::abs(Eigen::Quaterniond(values[6], values[3], values[4], values[5]).norm() - 1.0) > 1e-3)
       throw std::runtime_error(std::string("[Scene] ") + name + " quaternion must have unit norm");
+  }
+  if (get_parameter("drop_into_bin").as_bool()) {
+    check_vector("bin_pose", 6);
+    check_vector("bin_dimensions", 3, true);
+    const auto dims = get_parameter("bin_dimensions").as_double_array();
+    const double thickness = get_parameter("bin_wall_thickness").as_double();
+    if (!std::isfinite(thickness) || thickness <= 0 ||
+        dims[0] <= 2 * thickness || dims[1] <= 2 * thickness || dims[2] <= thickness)
+      throw std::runtime_error("[Bin] Invalid wall thickness or bin dimensions");
+    const Eigen::Vector3d release = vectorToEigen(get_parameter("bin_pose").as_double_array()).inverse() *
+                                   vectorToEigen(get_parameter("place_pose").as_double_array()).translation();
+    if (std::abs(release.x()) >= dims[0] / 2 - thickness ||
+        std::abs(release.y()) >= dims[1] / 2 - thickness || release.z() <= dims[2])
+      throw std::runtime_error("[Bin] place_pose must be above the open bin, with object bottom above the rim");
   }
   if (source == "known") {
     check_vector("support_surface_dimensions", 3, true);
@@ -383,6 +411,7 @@ void MTCTaskNode::validateConfiguration()
 void MTCTaskNode::validateFrame(const std::string& frame, const std::string& parameter)
 {
   const auto model = task_.getRobotModel();
+  if (!model) throw std::runtime_error("[Robot Description] No robot model for frame validation");
   if (!frame.empty() && (model->hasLinkModel(frame) || frame == model->getModelFrame())) return;
   tf2_ros::Buffer buffer(get_clock());
   tf2_ros::TransformListener listener(buffer);
@@ -473,13 +502,14 @@ void MTCTaskNode::setupSceneFromKnownObjects()
               target_object_id_.c_str(), support_surface_id_.c_str());
 }
 
-void MTCTaskNode::setupSceneFromPerception()
+void MTCTaskNode::setupSceneFromPerception(const std::string& target_label)
 {
-  planning_scene_client = std::make_shared<GetPlanningSceneClient>(
-      get_parameter("scene_service_name").as_string(), get_parameter("service_timeout").as_double(),
-      get_parameter("use_sim_time").as_bool());
+  if (!planning_scene_client)
+    planning_scene_client = std::make_shared<GetPlanningSceneClient>(
+        get_parameter("scene_service_name").as_string(), get_parameter("service_timeout").as_double(),
+        get_parameter("use_sim_time").as_bool());
   const auto response = planning_scene_client->call_service(
-      get_parameter("object_type").as_string(), get_parameter("object_dimensions").as_double_array());
+      get_parameter("object_type").as_string(), get_parameter("object_dimensions").as_double_array(), target_label);
   if (!response.success)
     throw std::runtime_error("[Scene] Perception returned success=false; planning stopped. Check perception server logs.");
   scene_world_ = response.scene_world;
@@ -497,11 +527,12 @@ void MTCTaskNode::setupSceneFromPerception()
   updateObjectParameters(*target);
 }
 
-void MTCTaskNode::setupPlanningScene()
+void MTCTaskNode::setupPlanningScene(const std::string& target_label)
 {
   scene_ready_ = false;
   if (get_parameter("scene_source").as_string() == "known") setupSceneFromKnownObjects();
-  else setupSceneFromPerception();
+  else setupSceneFromPerception(target_label);
+  if (get_parameter("drop_into_bin").as_bool()) appendCollectionBin();
   for (const auto& object : scene_world_.collision_objects) {
     validateFrame(object.header.frame_id, "collision_object[" + object.id + "].frame");
     if (object.id.empty() || object.operation != moveit_msgs::msg::CollisionObject::ADD ||
@@ -528,11 +559,88 @@ void MTCTaskNode::setupPlanningScene()
   if (!apply->wait_for_service(timeout) || !get->wait_for_service(timeout))
     throw std::runtime_error("[MoveIt] Planning scene services unavailable before service_timeout");
   moveit::planning_interface::PlanningSceneInterface psi("", false);
-  if (!psi.applyCollisionObjects(scene_world_.collision_objects))
+  // Never discard an object still held after a failed execution. It needs recovery
+  // before another capture/plan can safely replace its collision geometry.
+  if (!psi.getAttachedObjects().empty())
+    throw std::runtime_error("[Scene] An object is still attached; recover/release it before another task");
+  auto objects = scene_world_.collision_objects;
+  std::vector<moveit_msgs::msg::CollisionObject> refreshed;
+  for (const auto& id : managed_scene_ids_) {
+    moveit_msgs::msg::CollisionObject remove;
+    remove.id = id;
+    remove.operation = moveit_msgs::msg::CollisionObject::REMOVE;
+    refreshed.push_back(std::move(remove));
+  }
+  refreshed.insert(refreshed.end(), objects.begin(), objects.end());
+  if (!psi.applyCollisionObjects(refreshed))
     throw std::runtime_error("[Scene] MoveIt rejected collision objects; planning stopped");
+  managed_scene_ids_.clear();
+  for (const auto& object : objects) managed_scene_ids_.insert(object.id);
   scene_ready_ = true;
   RCLCPP_INFO(get_logger(), "[Scene] Applied %zu collision objects; target='%s', support='%s'",
               scene_world_.collision_objects.size(), target_object_id_.c_str(), support_surface_id_.c_str());
+}
+
+void MTCTaskNode::appendCollectionBin()
+{
+  const auto size = get_parameter("bin_dimensions").as_double_array();
+  const double t = get_parameter("bin_wall_thickness").as_double();
+  const auto base = vectorToEigen(get_parameter("bin_pose").as_double_array());
+  moveit_msgs::msg::CollisionObject bin;
+  bin.id = "collection_bin";
+  bin.header.frame_id = get_parameter("world_frame").as_string();
+  bin.operation = moveit_msgs::msg::CollisionObject::ADD;
+  const auto add = [&](double x, double y, double z, double sx, double sy, double sz) {
+    shape_msgs::msg::SolidPrimitive primitive;
+    primitive.type = shape_msgs::msg::SolidPrimitive::BOX;
+    primitive.dimensions = {sx, sy, sz};
+    bin.primitives.push_back(primitive);
+    bin.primitive_poses.push_back(tf2::toMsg(Eigen::Isometry3d(base * Eigen::Translation3d(x, y, z))));
+  };
+  add(0, 0, t / 2, size[0], size[1], t);
+  add(-(size[0] - t) / 2, 0, size[2] / 2, t, size[1], size[2]);
+  add((size[0] - t) / 2, 0, size[2] / 2, t, size[1], size[2]);
+  add(0, -(size[1] - t) / 2, size[2] / 2, size[0] - 2 * t, t, size[2]);
+  add(0, (size[1] - t) / 2, size[2] / 2, size[0] - 2 * t, t, size[2]);
+  scene_world_.collision_objects.push_back(std::move(bin));
+}
+
+void MTCTaskNode::startCommandService()
+{
+  // Keep service execution separate from the default group used by MoveIt clients.
+  // A second command can enter only to receive an immediate "busy" response.
+  command_group_ = create_callback_group(rclcpp::CallbackGroupType::Reentrant);
+  command_service_ = create_service<robot_task_interfaces::srv::RunPickPlace>(
+      get_parameter("command_service_name").as_string(),
+      [this](const robot_task_interfaces::srv::RunPickPlace::Request::SharedPtr request,
+             robot_task_interfaces::srv::RunPickPlace::Response::SharedPtr response) {
+        std::unique_lock<std::mutex> lock(command_mutex_, std::try_to_lock);
+        if (!lock.owns_lock()) {
+          response->message = "Robot is busy; wait for the current task to finish";
+          return;
+        }
+        if (request->target_label.find_first_not_of(" \t\r\n") == std::string::npos) {
+          response->message = "Target text must not be empty";
+          return;
+        }
+        RCLCPP_INFO(get_logger(), "[Command] Starting target='%s'", request->target_label.c_str());
+        try {
+          setupPlanningScene(request->target_label);
+          doTask();
+          response->success = true;
+          response->executed = get_parameter("execute").as_bool();
+          response->message = response->executed ? "Pick and place executed successfully" :
+                                                  "Pick and place planned successfully (execute=false)";
+        } catch (const std::exception& error) {
+          scene_ready_ = false;
+          response->message = error.what();
+          RCLCPP_ERROR(get_logger(), "[Command] Failed: %s", error.what());
+        }
+        RCLCPP_INFO(get_logger(), "[Command] Finished success=%s; waiting for next command",
+                    response->success ? "true" : "false");
+      }, rclcpp::ServicesQoS(), command_group_);
+  RCLCPP_INFO(get_logger(), "[Command] Ready on %s; no perception or planning until a command arrives",
+              get_parameter("command_service_name").as_string().c_str());
 }
 
 void MTCTaskNode::checkExecutionControllers()
@@ -631,6 +739,15 @@ void MTCTaskNode::doTask()
       throw std::runtime_error("[MTC execution] Failed with code " + std::to_string(result.val));
     }
     RCLCPP_INFO(this->get_logger(), "Task executed successfully");
+    if (get_parameter("drop_into_bin").as_bool()) {
+      // The released object falls under gravity; do not retain a floating estimate.
+      moveit_msgs::msg::CollisionObject remove;
+      remove.id = target_object_id_;
+      remove.operation = moveit_msgs::msg::CollisionObject::REMOVE;
+      moveit::planning_interface::PlanningSceneInterface psi("", false);
+      if (psi.applyCollisionObjects({remove})) managed_scene_ids_.erase(target_object_id_);
+      else RCLCPP_WARN(get_logger(), "[Bin] Could not clear the released object's estimated pose");
+    }
   }
   else
   {
@@ -1000,7 +1117,7 @@ mtc::Task MTCTaskNode::createTask()
     /******************************************************
 ---- *          Lower Object                              *
      *****************************************************/
-    {
+    if (!get_parameter("drop_into_bin").as_bool()) {
       auto stage = std::make_unique<mtc::stages::MoveRelative>("lower object", cartesian_planner);
       stage->properties().set("marker_ns", "lower_object");
       stage->properties().set("link", gripper_frame);
@@ -1146,7 +1263,7 @@ int main(int argc, char** argv)
     auto mtc_task_node = std::make_shared<MTCTaskNode>(options);
 
     // Set up a multi-threaded executor
-    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 2);
+    rclcpp::executors::MultiThreadedExecutor executor(rclcpp::ExecutorOptions(), 3);
     executor.add_node(mtc_task_node);
 
     std::thread spinner([&executor]() { executor.spin(); });
@@ -1154,11 +1271,15 @@ int main(int argc, char** argv)
     // Set up the planning scene and execute the task
     try {
       mtc_task_node->validateConfiguration();
-      RCLCPP_INFO(mtc_task_node->get_logger(), "Setting up planning scene");
-      mtc_task_node->setupPlanningScene();
-      RCLCPP_INFO(mtc_task_node->get_logger(), "Executing task");
-      mtc_task_node->doTask();
-      RCLCPP_INFO(mtc_task_node->get_logger(), "Task execution completed. Keeping node alive for visualization. Press Ctrl+C to exit.");
+      if (mtc_task_node->get_parameter("interactive").as_bool()) {
+        mtc_task_node->startCommandService();
+      } else {
+        RCLCPP_INFO(mtc_task_node->get_logger(), "Setting up planning scene");
+        mtc_task_node->setupPlanningScene();
+        RCLCPP_INFO(mtc_task_node->get_logger(), "Executing task");
+        mtc_task_node->doTask();
+        RCLCPP_INFO(mtc_task_node->get_logger(), "Task execution completed. Keeping node alive for visualization. Press Ctrl+C to exit.");
+      }
 
       // Keep the node running until Ctrl+C is pressed
       spinner.join();

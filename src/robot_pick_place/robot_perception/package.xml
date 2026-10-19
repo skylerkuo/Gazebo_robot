@@ -5,6 +5,7 @@
   <maintainer email="skylerkuo@users.noreply.github.com">Skyler Kuo</maintainer>
   <license>BSD-3-Clause</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
   <depend>rclcpp</depend>
   <depend>robot_task_interfaces</depend>
   <depend>moveit_msgs</depend>
@@ -17,6 +18,10 @@
   <depend>tf2_eigen</depend>
   <depend>libpcl-all-dev</depend>
   <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs_py</exec_depend><exec_depend>cv_bridge</exec_depend>
+  <exec_depend>tf2_ros_py</exec_depend>
+  <exec_depend>python3-numpy</exec_depend><exec_depend>python3-opencv</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <export><build_type>ament_cmake</build_type></export>

@@ -14,5 +14,6 @@ setup(
     maintainer='Skyler Kuo', maintainer_email='skylerkuo@users.noreply.github.com',
     description='Profile-based integration of robot simulation, MoveIt and generic tasks.',
     license='BSD-3-Clause',
-    entry_points={'console_scripts': ['wait_ready = robot_bringup.readiness:main']},
+    entry_points={'console_scripts': ['wait_ready = robot_bringup.readiness:main',
+                                     'pick_console = robot_bringup.pick_console:main']},
 )

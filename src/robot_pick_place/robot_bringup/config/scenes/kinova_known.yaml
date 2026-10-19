@@ -1,15 +1,15 @@
 mtc_node:
   ros__parameters:
-    object_name: target_cylinder
+    object_name: drink_can
     object_type: cylinder
     object_reference_frame: base_link
     object_dimensions:
-    - 0.35
+    - 0.1
     - 0.02
     object_pose:
-    - 0.35
-    - 0.15
-    - 0.175
+    - 0.30
+    - -0.02
+    - 0.05
     - 0.0
     - 0.0
     - 0.0
@@ -27,9 +27,9 @@ mtc_node:
     - 0.0
     - 0.0
     place_pose:
-    - 0.35
-    - -0.15
-    - 0.0
+    - 0.25
+    - -0.52
+    - 0.18
     - 0.0
     - 0.0
     - 0.0
@@ -40,3 +40,8 @@ mtc_node:
     lower_object_max_dist: 0.08
     retreat_max_distance: 0.08
     grasp_pose_min_solution_distance: 0.2
+    # Release above the rim; gravity drops the object into the open bin.
+    drop_into_bin: true
+    bin_pose: [0.25, -0.52, 0.0, 0.0, 0.0, 0.0]
+    bin_dimensions: [0.32, 0.22, 0.10]
+    bin_wall_thickness: 0.01

@@ -13,6 +13,7 @@ from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 from robot_bringup.configuration import prepare_configuration
 from robot_bringup.profile import load_profile, load_ros_parameters, package_file
@@ -30,6 +31,12 @@ def setup(context):
     source = get('scene_source')
     if source not in ('known', 'perception'):
         raise ValueError(f'scene_source must be known or perception, got {source!r}')
+    method = get('perception_method')
+    if method == 'ai' and source != 'perception':
+        raise ValueError('perception_method=ai requires scene_source=perception')
+    interactive = method == 'ai' if not get('interactive') else boolean(get('interactive'), 'interactive')
+    if interactive and (method != 'ai' or source != 'perception'):
+        raise ValueError('interactive=true requires perception_method=ai and scene_source=perception')
     execute = boolean(get('execute'), 'execute')
     sim_time = boolean(get('use_sim_time'), 'use_sim_time')
     camera = source == 'perception' if not get('use_camera') else boolean(get('use_camera'), 'use_camera')
@@ -43,11 +50,13 @@ def setup(context):
 
     try:
         moveit, task, perception, urdf_file, controllers_file = prepare_configuration(profile, runtime, source, camera)
-        task.update(use_sim_time=sim_time, scene_source=source, execute=execute, service_timeout=timeout)
+        task.update(use_sim_time=sim_time, scene_source=source, execute=execute, service_timeout=timeout,
+                    interactive=interactive, command_service_name=get('command_service_name'))
         if get('task_params_file'):
             task.update(load_ros_parameters(get('task_params_file')))
             # Safety and launch mode remain explicit launch options.
-            task.update(use_sim_time=sim_time, scene_source=source, execute=execute, service_timeout=timeout)
+            task.update(use_sim_time=sim_time, scene_source=source, execute=execute, service_timeout=timeout,
+                        interactive=interactive, command_service_name=get('command_service_name'))
         moveit_file = Path(runtime) / 'moveit.yaml'
         moveit_file.write_text(yaml.safe_dump(moveit, sort_keys=False))
         defaults = package_file('robot_task_core', 'config/mtc_defaults.yaml', 'task defaults')
@@ -94,16 +103,40 @@ def setup(context):
 
             RegisterEventHandler(OnProcessExit(target_action=ready, on_exit=after_ready)),
             RegisterEventHandler(OnProcessExit(target_action=demo, on_exit=after_task)),
-            LogInfo(msg=f'[Bringup] profile={profile["robot_id"]}, scene_source={source}, execute={execute}, runtime={runtime}'),
+            LogInfo(msg=f'[Bringup] profile={profile["robot_id"]}, scene_source={source}, perception_method={method}, interactive={interactive}, execute={execute}, runtime={runtime}'),
             # Vendor launches reuse names such as rviz_config_file and use_rviz.
             # Keep their defaults local so Gazebo/RSP cannot overwrite MoveIt's RViz config.
             GroupAction(scoped=True, actions=[gazebo]),
             GroupAction(scoped=True, actions=[move_group]),
         ]
         if source == 'perception':
+            geometry = dict(perception)
+            if method == 'ai':
+                geometry['service_name'] = task['scene_service_name'].rstrip('/') + '/geometry'
+                geometry['capture_on_request'] = True
+                geometry['capture_timeout'] = min(timeout * 0.25, 5.0)
+                cache = Path(get('ai_cache_dir')).expanduser().resolve()
+                cache.mkdir(parents=True, exist_ok=True)
+                model = Path(get('ai_model')).expanduser()
+                if model.parent != Path('.'):
+                    model = model.resolve()
+                ai = Node(package='robot_perception', executable='ai_planning_scene_server',
+                          output='screen', cwd=str(cache), parameters=[{
+                              'use_sim_time': sim_time, 'service_name': task['scene_service_name'],
+                              'geometry_service_name': geometry['service_name'],
+                              'target_frame': perception['target_frame'],
+                              'model': str(model),
+                              'target_class': ParameterValue(get('ai_target_class'), value_type=str),
+                              'device': ParameterValue(get('ai_device'), value_type=str),
+                              'confidence': float(get('ai_confidence')), 'image_size': int(get('ai_image_size')),
+                              'backend_timeout': min(timeout * 0.5, 15.0),
+                          }])
+                actions.append(RegisterEventHandler(OnProcessExit(target_action=ai, on_exit=lambda event, context:
+                    [EmitEvent(event=Shutdown(reason=f'AI perception server exited with code {event.returncode}'))])))
+                actions.append(ai)
             actions.append(Node(package='robot_perception', executable='get_planning_scene_server',
                                 output='screen',
-                                parameters=[perception, {'use_sim_time': sim_time}]))
+                                parameters=[geometry, {'use_sim_time': sim_time}]))
         actions.append(ready)
         # Keep resources until launch and its managed processes have actually exited.
         atexit.register(shutil.rmtree, runtime, ignore_errors=True)
@@ -118,6 +151,18 @@ def generate_launch_description():
         DeclareLaunchArgument('robot', default_value='mycobot_280', description='Installed robot profile ID'),
         DeclareLaunchArgument('profile', default_value='', description='Optional external profile YAML (robot_id must match robot)'),
         DeclareLaunchArgument('scene_source', default_value='perception', choices=['known', 'perception']),
+        DeclareLaunchArgument('perception_method', default_value='geometry', choices=['geometry', 'ai'],
+                              description='Original shape/dimension matching, or YOLOE semantic target selection'),
+        DeclareLaunchArgument('interactive', default_value='',
+                              description='Auto: AI waits for text commands; false restores one-shot AI'),
+        DeclareLaunchArgument('command_service_name', default_value='/pick_place/run'),
+        DeclareLaunchArgument('ai_model', default_value='yoloe-26n-seg.pt'),
+        DeclareLaunchArgument('ai_target_class', default_value='drink can', description='YOLOE text prompt for the target object'),
+        DeclareLaunchArgument('ai_device', default_value='cpu', description='cpu or CUDA device index, e.g. 0'),
+        DeclareLaunchArgument('ai_confidence', default_value='0.05'),
+        DeclareLaunchArgument('ai_image_size', default_value='960'),
+        DeclareLaunchArgument('ai_cache_dir', default_value=str(Path.home() / '.cache/robot_perception/yoloe'),
+                              description='Working directory for model and text-encoder caches'),
         DeclareLaunchArgument('execute', default_value='false', choices=['true', 'false']),
         DeclareLaunchArgument('use_sim_time', default_value='true', choices=['true', 'false']),
         DeclareLaunchArgument('use_rviz', default_value='true', choices=['true', 'false']),

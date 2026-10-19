@@ -70,7 +70,8 @@ public:
    * This method sends a request to the GetPlanningScene service and waits for a response.
    * It then processes the response and returns it as a PlanningSceneResponse struct.
    */
-  PlanningSceneResponse call_service(const std::string& target_shape, const std::vector<double>& target_dimensions);
+  PlanningSceneResponse call_service(const std::string& target_shape, const std::vector<double>& target_dimensions,
+                                    const std::string& target_label = "");
 
 private:
   double timeout_;

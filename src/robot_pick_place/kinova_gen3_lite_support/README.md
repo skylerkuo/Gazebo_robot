@@ -24,7 +24,7 @@ ros2 launch robot_bringup demo.launch.py robot:=kinova_gen3_lite scene_source:=k
 
 無 GUI 加上 `headless:=true use_rviz:=false`。要送出規劃軌跡可用 `execute:=true`；
 初次整合驗證採 execute=false；後續已驗證 perception + execute=true 的完整 MTC 軌跡執行，
-日誌顯示 Task executed successfully。尚未量測 Gazebo 物件是否穩定夾持並抵達放置點。
+日誌顯示 Task executed successfully。後續終端模式已量測實際罐子位移，詳見工作區 docs/validation.md。
 請與 myCobot 擇一啟動，兩個 Profile 使用相同的 ROS topic／service／controller manager 名稱。
 
 ## 整合位置
@@ -46,24 +46,33 @@ ros2 launch robot_bringup demo.launch.py robot:=kinova_gen3_lite scene_source:=k
 - `launch/` 滿足現有 bringup 契約，直接使用準備好的同一份 URDF、Controller YAML 與 MoveIt
   字典。只有一份 robot_state_publisher、一個 gz_ros2_control controller manager、一個 move_group。
 - 抓取 TCP 相對 end_effector_link 沿局部 Z 軸偏移 +0.13m，抓取方向依 Lite 的手指閉合方向設定；
-  物件中心 `[0.35,0.15,0.175]`，放置底面 `[0.35,-0.15,0]`。調整這些值只需改 YAML。
-- 仍執行 `robot_task_core/mtc_node`。核心 C++、共用感知及 myCobot 來源均未因本次整合修改。
+  預設飲料罐中心 `[0.30,-0.02,0.05]`；投放時物品底面到 `[0.25,-0.52,0.18]`。
+- 仍執行 `robot_task_core/mtc_node`。後續互動與收集箱功能沿用相同任務，未複製 MTC。
 
 ## 水果與生活物品場景
 
-`worlds/pick_place.sdf` 保留原測試圓柱，另加入不需下載外部網格的簡化物品：
+`worlds/pick_place.sdf` 已移除蘋果、紅色長圓柱與紙盒，目前包含以下不需下載外部網格的物品：
 
 | 物件 | 尺寸 | 位置 xyz（m） |
 |---|---|---|
 | 橘子 | 直徑 52mm | 0.24, 0.28, 0.026 |
-| 蘋果 | 直徑 50mm | 0.40, 0.02, 0.025 |
+| 黃綠色網球（白色接縫） | 直徑 52mm | 0.40, 0.02, 0.026 |
+| 綠色瓶子（瓶頸、藍蓋、淺色標籤） | 主體直徑 36mm、總高 120mm | 0.35, 0.15, 0.06 |
 | 藍色飲料罐 | 直徑 40mm、高 100mm | 0.30, -0.02, 0.05 |
-| 小紙盒 | 45×35×65mm | 0.28, -0.30, 0.0325 |
+| 紅色馬克杯（深色杯口、把手） | 杯身直徑 44mm、高 70mm | 0.28, -0.25, 0.035 |
 
 每個物件都是獨立動態模型，包含碰撞形狀、質量及慣性；水果使用球形與果梗呈現外觀。
-生活物品距底座的水平距離約 30～41cm；保留原長圓柱與放置位置，並分散擺放。
-目前感知只做幾何擬合，仍以 cylinder／box 表示物件，不提供水果語意或精確球形辨識。
-原本啟動指令會載入新場景，預設仍抓原測試圓柱。
+生活物品距底座的水平距離約 30～41cm，分散擺放。
+目前 PCL 仍以 cylinder／box 近似物件；選用 AI 可透過英文文字辨識目標。
+原本啟動指令會載入新場景，known／幾何模式的預設目標已同步改為藍色飲料罐。
+
+AI 終端建議輸入 `green plastic bottle`、`tennis ball`、`drink can`。
+同一張實際相機畫面上，前兩者的 YOLOE 信心分別約 0.616／0.387，`drink can` 約 0.817。
+這是該畫面的量測，不保證所有視角與擺放皆相同；泛稱 `bottle` 可能選到藍色飲料罐。
+紙盒已換成紅色馬克杯。AI 建議輸入 `red cup`（實際相機單張信心約 0.251），
+`red mug` 也能選中（約 0.147）；泛稱 `cup`／`mug` 在該畫面未檢出。
+杯身採圓柱碰撞與對應慣性，把手與深色杯口僅呈現外觀；目前抓杯身，不支援抓把手或盛裝液體。
+瓶子的視覺包含瓶頸與瓶蓋，物理碰撞與慣性採整體圓柱包覆，與目前 primitive 抓取近似一致。
 
 可透過現有 task_params_file 改為飲料罐，不需要修改 MTC 或 Profile：
 
@@ -73,7 +82,12 @@ ros2 launch robot_bringup demo.launch.py robot:=kinova_gen3_lite \
   execute:=false
 ```
 
-水果與紙盒尚未驗證抓取，新增物品的穩定物理夾持也尚未驗證。
+收集箱為開口模型，外尺寸 32×22×10cm，底面中心 `[0.25,-0.52,0]`；
+具有箱底與四片箱壁的真實碰撞形狀，MoveIt 以相同五片 BOX 建模。
+投放區在目前點雲 crop 之外，避免重複選到箱內物品。預設物品底面在箱緣上方 8cm 開夾，
+跳過向下放置階段；箱內物品由物理模擬落下，不逐一規劃箱底位置。
+設定位於 bringup 的 kinova_known.yaml、kinova_perception.yaml，使用 drop_into_bin=true。
+各物品實際抓放結果見工作區 docs/validation.md。
 
 ## 官方來源的最小相容修正
 

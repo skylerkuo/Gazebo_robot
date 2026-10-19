@@ -3,9 +3,78 @@
 初始通用化使用 myCobot 280，後續依要求新增 Kinova Gen3 Lite。使用者提供的規格文件及
 Zone.Identifier 未修改；舊 MTC、Service Type、PCL 來源與 robot.sh 保留。
 
+## 紙盒換成紅色馬克杯（2026-10-19）
+
+- `kinova_gen3_lite_support/worlds/pick_place.sdf`：移除 small_carton，新增 red_mug（圓柱杯身、深色杯口、視覺把手），位於 `[0.28,-0.25,0.035]`。
+- `tests/test_kinova_profile.py`：既有場景契約確認紙盒不存在、馬克杯存在。
+- 根目錄與 support README、`docs/{ai_perception,validation,changed_files}.md`：更新場景、提示與測試結果。
+
+此次未改動 Profile、AI 閾值、PCL／MTC 程式或其他物品。
+
+## 更換 Kinova 辨識測試物品
+
+- `kinova_gen3_lite_support/worlds/pick_place.sdf`：移除 apple、target_cylinder，新增有瓶頸／瓶蓋／標籤的 plastic_bottle 與有白色接縫的 tennis_ball；無外部模型下載。
+- `robot_bringup/config/scenes/kinova_{known,perception}.yaml`：預設幾何目標改為現存 drink_can，移除對已刪除圓柱的目標設定。
+- `robot_bringup/robot_bringup/pick_console.py`：更新終端提示範例。
+- `tests/{test_kinova_profile,check_ai_commands}.py`：核對新物件與預設目標，更新多次執行測試目標。
+- `README.md`、`kinova_gen3_lite_support/README.md`、`docs/{ai_perception,changed_files,validation}.md`：現行物品、英文提示與實測紀錄。
+
+套件路徑位於 `src/robot_pick_place/`。未改 MTC、PCL 演算法、AI 模型／閾值、抓取角度或 myCobot。
+
+## Kinova 收集箱投放
+
+| 檔案 | 變更 |
+|---|---|
+| `kinova_gen3_lite_support/worlds/pick_place.sdf` | 加入開口收集箱，箱底與四壁均有真實碰撞形狀 |
+| `robot_bringup/config/scenes/kinova_{known,perception}.yaml` | 啟用箱口上方投放，設定箱體尺寸、位置及物品底面釋放高度 |
+| `robot_task_core/src/mtc_node.cpp` | 選用 drop_into_bin、加入對應五片 BOX 碰撞模型、跳過向下放置、執行完成後清除懸空物件估計 |
+| `tests/test_kinova_profile.py` | 比對箱體與場景設定、開口高度與抓取 crop 範圍隔離 |
+| `tests/check_ai_commands.py` | 實際執行重複測試時，第二次抓取尚未收集的 apple |
+| `kinova_gen3_lite_support/README.md`、`README.md`、`docs/{ai_perception,changed_files,validation}.md` | 新行為、參數與實測結果 |
+
+套件路徑位於 `src/robot_pick_place/`。本次未更動 myCobot、Robot Profile 抓取角度或 AI 模型。
+
+## 可選 YOLOE 辨識模式
+
+後續「終端輸入與重複抓取」在既有 AI 整合上新增以下必要修改：
+
+| 檔案 | 變更 |
+|---|---|
+| `robot_bringup/robot_bringup/pick_console.py`、`setup.py`、`package.xml` | 單一終端啟動入口、逐筆讀取文字、結果回報及僅清理自己啟動的模擬 |
+| `robot_bringup/launch/demo.launch.py` | AI 預設等待指令，單次流程可透過 interactive=false 保留；AI 啟用請求後取像 |
+| `robot_task_interfaces/srv/RunPickPlace.srv`、`CMakeLists.txt` | 一筆文字、一個完整任務的請求與結果 |
+| `robot_task_interfaces/srv/GetPlanningScene.srv` | 增加可選 target_label，原形狀／尺寸欄位與回應保持 |
+| `robot_task_core/{include/robot_task_core/get_planning_scene_client.h,src/get_planning_scene_client.cpp}` | 將當次文字傳入場景服務 |
+| `robot_task_core/src/mtc_node.cpp` | 等待／重複請求、busy 拒絕、每次重建原 Task、刷新既有管理物件、失敗後仍可再輸入 |
+| `robot_perception/src/get_planning_scene_server.cpp` | 請求後短暫訂閱，取得新且同步的 RGB／深度，再沿用原 PCL 處理 |
+| `robot_perception/robot_perception/{ai_scene_server,yoloe_detector}.py` | 逐次切換文字提示，模型只載入一次 |
+| `tests/check_ai_commands.py` | 真實模擬驗證 idle gating、fresh capture、busy、失敗重試與兩次完整規劃／選用執行 |
+| `tests/run_demo_check.py` | 原單次測試明確設定 interactive=false |
+
+以上路徑的套件位於 `src/robot_pick_place/`；myCobot、Kinova Profile／抓取角度及 MTC stage 未改動。
+
+最初的單次 AI 整合未修改 myCobot、Kinova Profile／抓取角度、世界模型、MTC 程式或服務格式；
+本次終端互動的 MTC 與介面修改則列於上表。
+
+| 檔案 | 變更 |
+|---|---|
+| `object_detect.py` | 原單張圖片辨識改用共用 YOLOE 封裝，保留每類最高信心結果，新增 CLI 參數 |
+| `robot_perception/robot_perception/yoloe_detector.py` | 共用模型載入與推論，AI 依賴延遲載入 |
+| `robot_perception/robot_perception/ai_selection.py` | 像素對齊深度、TF 轉換、遮罩到既有 3D 物件的對應與歧義拒絕 |
+| `robot_perception/robot_perception/ai_scene_server.py` | 將 AI 選擇結果接到原 GetPlanningScene，保留完整場景與支撐面 |
+| `robot_perception/robot_perception/__init__.py`、`scripts/ai_planning_scene_server` | Python 模組及 ROS 執行入口 |
+| `robot_perception/{CMakeLists.txt,package.xml,requirements-ai.txt}` | 安裝 Python 模組與入口、宣告 ROS 依賴、列出選用 AI 依賴 |
+| `robot_bringup/launch/demo.launch.py` | geometry／ai 切換、模型／類別／裝置參數，預設流程維持 geometry |
+| `tests/test_ai_selection.py` | 有效深度、padding／endianness、TF、唯一對應與失敗拒絕檢查 |
+| `tests/run_demo_check.py` | 支援測試 AI 模式與節點存在性檢查 |
+| `README.md`、`docs/{ai_perception,architecture,changed_files,validation}.md` | 使用方式、資料流、變更與實測結果 |
+
+上表的套件相對路徑均位於 `src/robot_pick_place/`。`.venv` 與模型 cache 為本機依賴，
+不加入原始碼；AI 僅安裝在工作區虛擬環境，原幾何模式可使用系統 Python。
+
 ## 本次 Kinova Gen3 Lite 整合
 
-本次未修改 myCobot 套件，也未修改／複製 `robot_task_core` 的任務程式或共用感知演算法。
+初次 Kinova 整合未修改 myCobot 套件，也未修改／複製 `robot_task_core` 的任務程式或共用感知演算法。
 
 | 檔案／目錄 | 變更 |
 |---|---|

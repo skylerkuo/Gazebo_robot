@@ -31,7 +31,7 @@ Panels:
     Name: Motion Planning Tasks
     Tasks View:
       property_splitter:
-        - 142
+        - 131
         - 85
       solution_sorting:
         column: 0
@@ -41,10 +41,10 @@ Panels:
         - 198
       solutions_view_columns: ~
       tasks_view_columns:
-        - 308
+        - 281
         - 26
         - 26
-        - 35
+        - 48
 Visualization Manager:
   Class: ""
   Displays:
@@ -87,77 +87,74 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
+          arm_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_base:
+          dummy_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          end_effector_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          forearm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left1:
+          gripper_base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left2:
+          left_finger_dist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left3:
+          left_finger_prox_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right1:
+          lower_wrist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right2:
+          right_finger_dist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right3:
+          right_finger_prox_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link1:
+          scene_camera_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link2:
+          shoulder_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link3:
+          tool_frame:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: true
-          link4:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link5:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link6:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link6_flange:
+          upper_wrist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
@@ -180,77 +177,74 @@ Visualization Manager:
         Expand Link Details: false
         Expand Tree: false
         Link Tree Style: Links in Alphabetic Order
+        arm_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         base_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_base:
+        dummy_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        end_effector_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        forearm_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_left1:
+        gripper_base_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_left2:
+        left_finger_dist_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_left3:
+        left_finger_prox_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_right1:
+        lower_wrist_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_right2:
+        right_finger_dist_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        gripper_right3:
+        right_finger_prox_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        link1:
+        scene_camera_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        link2:
+        shoulder_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
           Value: true
-        link3:
+        tool_frame:
           Alpha: 1
           Show Axes: false
           Show Trail: false
-          Value: true
-        link4:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        link5:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        link6:
-          Alpha: 1
-          Show Axes: false
-          Show Trail: false
-          Value: true
-        link6_flange:
+        upper_wrist_link:
           Alpha: 1
           Show Axes: false
           Show Trail: false
@@ -303,77 +297,74 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
+          arm_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_base:
+          dummy_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          end_effector_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          forearm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left1:
+          gripper_base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left2:
+          left_finger_dist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left3:
+          left_finger_prox_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right1:
+          lower_wrist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right2:
+          right_finger_dist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right3:
+          right_finger_prox_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link1:
+          scene_camera_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link2:
+          shoulder_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link3:
+          tool_frame:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: true
-          link4:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link5:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link6:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link6_flange:
+          upper_wrist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
@@ -428,77 +419,74 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
+          arm_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_base:
+          dummy_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          end_effector_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          forearm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left1:
+          gripper_base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left2:
+          left_finger_dist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left3:
+          left_finger_prox_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right1:
+          lower_wrist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right2:
+          right_finger_dist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right3:
+          right_finger_prox_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link1:
+          scene_camera_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link2:
+          shoulder_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link3:
+          tool_frame:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: true
-          link4:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link5:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link6:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link6_flange:
+          upper_wrist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
@@ -531,6 +519,9 @@ Visualization Manager:
       Markers:
         All at once?: false
         Value: true
+        approach_object: true
+        lift_object: true
+        retreat: true
       Name: Motion Planning Tasks
       Robot:
         Fixed Robot Color: 150; 50; 150
@@ -540,77 +531,74 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
+          arm_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_base:
+          dummy_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          end_effector_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          forearm_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left1:
+          gripper_base_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left2:
+          left_finger_dist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_left3:
+          left_finger_prox_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right1:
+          lower_wrist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right2:
+          right_finger_dist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          gripper_right3:
+          right_finger_prox_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link1:
+          scene_camera_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link2:
+          shoulder_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
             Value: true
-          link3:
+          tool_frame:
             Alpha: 1
             Show Axes: false
             Show Trail: false
-            Value: true
-          link4:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link5:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link6:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          link6_flange:
+          upper_wrist_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
@@ -636,7 +624,7 @@ Visualization Manager:
       State Display Time: 0.05 s
       Task Solution Topic: /solution
       Tasks:
-        {}
+        pick_place_task: 5
       Trail Step Size: 1
       Value: true
   Enabled: true
@@ -685,7 +673,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 3.5866165161132812
+      Distance: 2.9315927028656006
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -700,14 +688,12 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.4903978705406189
+      Pitch: 0.4853978753089905
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
       Yaw: 5.453581809997559
     Saved: ~
 Window Geometry:
-  " - Slider":
-    collapsed: false
   Displays:
     collapsed: false
   Height: 1011
@@ -715,11 +701,13 @@ Window Geometry:
   Hide Right Dock: false
   Motion Planning Tasks:
     collapsed: false
+  Motion Planning Tasks - Slider:
+    collapsed: false
   MotionPlanning:
     collapsed: false
   MotionPlanning - Trajectory Slider:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000400000000000002570000039dfc020000000ffb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003b000000c7000000c700fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000003c005400720061006a006500630074006f007200790020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000003f00fffffffb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000003f00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000108000001690000016900fffffffb00000024005200760069007a00560069007300750061006c0054006f006f006c007300470075006901000002770000003f0000003f00fffffffb000000120020002d00200053006c00690064006500720000000000ffffffff0000003f00fffffffb0000002a004d006f00740069006f006e00200050006c0061006e006e0069006e00670020005400610073006b007301000002bc0000011c000000e300ffffff000000010000010f0000039dfc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073010000003b0000039d000000a000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004420000003efc0100000002fb0000000800540069006d00650100000000000004420000000000000000fb0000000800540069006d00650100000000000004500000000000000000000003cc0000039d00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000400000000000002570000039dfc0200000010fb0000001200530065006c0065006300740069006f006e00000001e10000009b0000005c00fffffffb0000001e0054006f006f006c002000500072006f007000650072007400690065007302000001ed000001df00000185000000a3fb000000120056006900650077007300200054006f006f02000001df000002110000018500000122fb000000200054006f006f006c002000500072006f0070006500720074006900650073003203000002880000011d000002210000017afb000000100044006900730070006c006100790073010000003b000000c7000000c700fffffffb0000002000730065006c0065006300740069006f006e00200062007500660066006500720200000138000000aa0000023a00000294fb00000014005700690064006500530074006500720065006f02000000e6000000d2000003ee0000030bfb0000000c004b0069006e0065006300740200000186000001060000030c00000261fb0000003c005400720061006a006500630074006f007200790020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000003f00fffffffb000000280020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000000000000000fb00000044004d006f00740069006f006e0050006c0061006e006e0069006e00670020002d0020005400720061006a006500630074006f0072007900200053006c00690064006500720000000000ffffffff0000003f00fffffffb0000001c004d006f00740069006f006e0050006c0061006e006e0069006e00670100000108000001740000016900fffffffb00000024005200760069007a00560069007300750061006c0054006f006f006c007300470075006901000002820000003f0000003f00fffffffb000000120020002d00200053006c00690064006500720000000000ffffffff0000000000000000fb0000002a004d006f00740069006f006e00200050006c0061006e006e0069006e00670020005400610073006b007301000002c700000111000000e300fffffffb0000003c004d006f00740069006f006e00200050006c0061006e006e0069006e00670020005400610073006b00730020002d00200053006c00690064006500720000000000ffffffff0000003f00ffffff000000010000010f0000039dfc0200000003fb0000001e0054006f006f006c002000500072006f00700065007200740069006500730100000041000000780000000000000000fb0000000a00560069006500770073010000003b0000039d000000a000fffffffb0000001200530065006c0065006300740069006f006e010000025a000000b200000000000000000000000200000490000000a9fc0100000001fb0000000a00560069006500770073030000004e00000080000002e10000019700000003000004420000003efc0100000002fb0000000800540069006d00650100000000000004420000000000000000fb0000000800540069006d00650100000000000004500000000000000000000003cc0000039d00000004000000040000000800000008fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   RvizVisualToolsGui:
     collapsed: false
   Selection:
@@ -731,5 +719,5 @@ Window Geometry:
   Views:
     collapsed: false
   Width: 1854
-  X: 61
-  Y: 52
+  X: 1670
+  Y: -6
