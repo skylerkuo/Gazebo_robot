@@ -91,6 +91,21 @@ class KinovaProfileContract(unittest.TestCase):
         self.assertEqual(task['object_dimensions'], [0.1, 0.02])
         self.assertEqual(task['object_name'], 'drink_can')
 
+    def test_three_collection_cameras_survive_sdf_and_wrist_follows_gripper(self):
+        _, _, _, urdf, _ = prepare_configuration(
+            self.profile, self.runtime.name, 'known', True, demonstration_cameras=True)
+        robot = ET.parse(urdf).getroot()
+        self.assertEqual(robot.find("joint[@name='scene_camera_joint']/origin").get('xyz'), '0.4 -0.6 0.9')
+        wrist = robot.find("joint[@name='wrist_camera_joint']")
+        self.assertEqual(wrist.find('parent').get('link'), 'gripper_base_link')
+        converted = subprocess.run(['gz', 'sdf', '-p', str(urdf)], capture_output=True, text=True, check=True, timeout=10)
+        sensors = ET.fromstring(converted.stdout).findall('.//sensor')
+        self.assertEqual({s.findtext('topic') for s in sensors}, {'camera_head', 'camera_wrist/image', 'camera_side/image'})
+        for sensor in sensors:
+            self.assertEqual(sensor.findtext('update_rate'), '10')
+            self.assertEqual(sensor.findtext('camera/image/width'), '640')
+            self.assertEqual(sensor.findtext('camera/image/height'), '480')
+
     def test_execution_group_covers_arm_and_gripper_trajectory(self):
         config, _, _, urdf, _ = self.prepare()
         robot = ET.parse(urdf).getroot()

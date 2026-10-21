@@ -1,0 +1,582 @@
+"""Collect bottle pick-and-place episodes in the original multi-object Gazebo world."""
+import argparse
+from collections import Counter, deque
+from datetime import datetime, timezone
+import json
+import math
+import os
+from pathlib import Path
+import random
+import shutil
+import subprocess
+import tempfile
+import time
+import uuid
+from xml.etree import ElementTree as ET
+
+import yaml
+from robot_bringup.demonstration_images import CAMERAS, MultiViewImages
+from robot_bringup.demonstration_storage import archive_episode
+
+
+TASK_TEXT = 'pick up drink bottle'
+BOTTLE = 'plastic_bottle'
+POSE_TOPIC = '/demonstrations/bottle_pose'
+
+
+def write_json(path, data):
+    temporary = path.with_suffix(path.suffix + '.tmp')
+    temporary.write_text(json.dumps(data, indent=2, ensure_ascii=False, allow_nan=False) + '\n')
+    temporary.replace(path)
+
+
+def sdf_pose(element):
+    """Read the axis-aligned poses used by this known world; reject unsupported frames."""
+    pose = element.find('pose')
+    values = list(map(float, pose.text.split())) if pose is not None else [0.0] * 6
+    if (len(values) != 6 or not all(math.isfinite(v) for v in values) or
+            any(abs(v) > 1e-9 for v in values[3:]) or
+            (pose is not None and pose.get('relative_to'))):
+        raise ValueError('The known-world importer requires axis-aligned xyz/rpy poses without relative_to')
+    return values
+
+
+def known_obstacles(world):
+    """Import the physical collision primitives, including both spherical props."""
+    from geometry_msgs.msg import Pose
+    from moveit_msgs.msg import CollisionObject, PlanningSceneWorld
+    from shape_msgs.msg import SolidPrimitive
+    scene = PlanningSceneWorld()
+    for model in world.findall('model'):
+        if model.get('name') in ('ground', BOTTLE, 'collection_bin'):
+            continue
+        model_pose = sdf_pose(model)
+        obstacle = CollisionObject()
+        obstacle.id = model.get('name')
+        obstacle.header.frame_id = 'base_link'
+        obstacle.operation = CollisionObject.ADD
+        for link in model.findall('link'):
+            link_pose = sdf_pose(link)
+            for collision in link.findall('collision'):
+                collision_pose = sdf_pose(collision)
+                primitive = SolidPrimitive()
+                geometry = collision.find('geometry')
+                if geometry.find('sphere') is not None:
+                    primitive.type = SolidPrimitive.SPHERE
+                    primitive.dimensions = [float(geometry.findtext('sphere/radius'))]
+                elif geometry.find('cylinder') is not None:
+                    primitive.type = SolidPrimitive.CYLINDER
+                    primitive.dimensions = [float(geometry.findtext('cylinder/length')),
+                                            float(geometry.findtext('cylinder/radius'))]
+                elif geometry.find('box') is not None:
+                    primitive.type = SolidPrimitive.BOX
+                    primitive.dimensions = list(map(float, geometry.findtext('box/size').split()))
+                else:
+                    raise ValueError('Unsupported collision geometry in ' + obstacle.id)
+                position = Pose()
+                position.position.x, position.position.y, position.position.z = (
+                    model_pose[i] + link_pose[i] + collision_pose[i] for i in range(3))
+                position.orientation.w = 1.0
+                obstacle.primitives.append(primitive)
+                obstacle.primitive_poses.append(position)
+        if not obstacle.primitives:
+            raise ValueError('Missing collision geometry in ' + obstacle.id)
+        scene.collision_objects.append(obstacle)
+    return scene
+
+
+def prepare_episode(directory, source_world, pose):
+    """Preserve every prop and the bin; randomize only the bottle in both worlds."""
+    directory.mkdir(parents=True, exist_ok=False)
+    tree = ET.parse(source_world)
+    world = tree.getroot().find('world')
+    if world is None or world.get('name') != 'default':
+        raise ValueError('Expected the Kinova world named default')
+    bottle = world.find("model[@name='plastic_bottle']")
+    if bottle is None:
+        raise ValueError('Source world has no plastic_bottle model')
+    bottle.find('pose').text = ' '.join(str(value) for value in pose)
+    bin_model = world.find("model[@name='collection_bin']")
+    if bin_model is None:
+        raise ValueError('Source world has no collection_bin')
+    bin_pose = sdf_pose(bin_model)
+    bin_link = bin_model.find('link')
+    if any(sdf_pose(bin_link)):
+        raise ValueError('Expected bin link at the model origin')
+    floor = list(map(float, bin_link.findtext("collision[@name='floor']/geometry/box/size").split()))
+    left = list(map(float, bin_link.findtext("collision[@name='left']/geometry/box/size").split()))
+    bin_dimensions = [floor[0], floor[1], left[2]]
+    thickness = floor[2]
+    # Match the five-box geometry generated by MTC's appendCollectionBin().
+    sx, sy, sz = bin_dimensions
+    expected_bin = {
+        'floor': ([0, 0, thickness / 2], [sx, sy, thickness]),
+        'left': ([-(sx - thickness) / 2, 0, sz / 2], [thickness, sy, sz]),
+        'right': ([(sx - thickness) / 2, 0, sz / 2], [thickness, sy, sz]),
+        'back': ([0, -(sy - thickness) / 2, sz / 2], [sx - 2 * thickness, thickness, sz]),
+        'front': ([0, (sy - thickness) / 2, sz / 2], [sx - 2 * thickness, thickness, sz]),
+    }
+    if {c.get('name') for c in bin_link.findall('collision')} != set(expected_bin):
+        raise ValueError('Unexpected collection bin collision geometry')
+    for name, (position, dimensions) in expected_bin.items():
+        collision = bin_link.find(f"collision[@name='{name}']")
+        actual = sdf_pose(collision)[:3] + list(map(float, collision.findtext('geometry/box/size').split()))
+        if len(actual) != 6 or any(abs(a - b) > 1e-8 for a, b in zip(actual, position + dimensions)):
+            raise ValueError('Physical and planning bin geometry differ: ' + name)
+    from rclpy.serialization import serialize_message
+    obstacles = known_obstacles(world)
+    (directory / 'known_obstacles.cdr').write_bytes(serialize_message(obstacles))
+    publisher = ET.SubElement(bottle, 'plugin', {
+        'filename': 'gz-sim-pose-publisher-system', 'name': 'gz::sim::systems::PosePublisher'})
+    for key, value in {'publish_model_pose': 'true', 'publish_link_pose': 'false',
+                       'publish_nested_model_pose': 'false', 'use_pose_vector_msg': 'true',
+                       'update_frequency': '50', 'topic': POSE_TOPIC}.items():
+        ET.SubElement(publisher, key).text = value
+    tree.write(directory / 'world.sdf', encoding='unicode', xml_declaration=True)
+    parameters = {
+        'object_name': BOTTLE, 'object_type': 'cylinder',
+        'object_dimensions': [0.12, 0.018], 'object_reference_frame': 'base_link',
+        'object_pose': pose, 'pick_only': False, 'drop_into_bin': True,
+        'bin_pose': bin_pose, 'bin_dimensions': bin_dimensions, 'bin_wall_thickness': thickness,
+        'known_obstacles_file': str(directory / 'known_obstacles.cdr'),
+        'max_solutions': 1, 'lift_object_min_dist': 0.06, 'lift_object_max_dist': 0.08,
+        'cartesian_max_velocity_scaling': 0.15, 'cartesian_max_acceleration_scaling': 0.15,
+        'demonstration_directory': str(directory),
+    }
+    (directory / 'task.yaml').write_text(yaml.safe_dump({'mtc_node': {'ros__parameters': parameters}}))
+    return dict(bin_pose_xyz_rpy=bin_pose, bin_dimensions_xyz=bin_dimensions,
+                bin_wall_thickness=thickness,
+                fixed_model_names=[m.get('name') for m in world.findall('model') if m.get('name') != BOTTLE],
+                known_obstacle_names=[o.id for o in obstacles.collision_objects])
+
+
+def verify_delivery(samples, start_ns, end_ns, hold_seconds, minimum_lift, requested_pose,
+                    bin_pose, bin_dimensions, thickness):
+    """Require a physical lift followed by the bottle resting inside the actual bin."""
+    if any(p.get('frame_id', 'default') != 'default' for p in samples):
+        return {'verified': False, 'reason': 'unexpected physical pose frame; expected default world'}
+    before = [p for p in samples if start_ns - 1_000_000_000 <= p['stamp_ns'] <= start_ns]
+    hold_ns = int(hold_seconds * 1e9)
+    after = [p for p in samples if end_ns <= p['stamp_ns'] <= end_ns + hold_ns]
+    during = [p for p in samples if start_ns <= p['stamp_ns'] <= end_ns]
+    result = {'verified': False, 'reason': 'missing bottle pose before, during execution or during hold'}
+    if not before or not during or len(after) < 2:
+        return result
+    initial = before[-1]
+    if math.dist(initial['xyz'], requested_pose[:3]) > 0.015:
+        result['reason'] = 'bottle moved away from the requested planning pose before execution'
+        return result
+    times = [p['stamp_ns'] for p in after]
+    max_gap = max([times[0] - end_ns, end_ns + hold_ns - times[-1]] +
+                  [b - a for a, b in zip(times, times[1:])])
+    if max_gap > 200_000_000:
+        result['reason'] = 'bottle pose stream has gaps over 0.2 simulation seconds'
+        return result
+    lift = max(p['xyz'][2] for p in during) - initial['xyz'][2]
+    result.update(initial_xyz=initial['xyz'], final_xyz=after[-1]['xyz'],
+                  maximum_observed_lift_m=lift, hold_seconds=hold_seconds)
+    if lift < minimum_lift:
+        result['reason'] = 'bottle was not physically lifted'
+        return result
+    for point in after:
+        # Projection of the bottle's cylindrical collision envelope on world axes.
+        q = point.get('orientation_xyzw')
+        if q is None or len(q) != 4 or not all(math.isfinite(v) for v in q):
+            result['reason'] = 'missing or invalid physical bottle orientation'
+            return result
+        x, y, z, w = q
+        if abs(sum(v * v for v in q) - 1.0) > 1e-3:
+            result['reason'] = 'physical bottle orientation is not a unit quaternion'
+            return result
+        axis = [2 * (x * z + w * y), 2 * (y * z - w * x), 1 - 2 * (x * x + y * y)]
+        extents = [0.06 * abs(v) + 0.018 * math.sqrt(max(0, 1 - v * v)) for v in axis]
+        local = [point['xyz'][i] - bin_pose[i] for i in range(3)]
+        if any(abs(local[i]) + extents[i] > bin_dimensions[i] / 2 - thickness + 0.003 for i in (0, 1)):
+            result['reason'] = 'bottle is outside the interior of the bin'
+            return result
+        bottom = local[2] - extents[2]
+        if not thickness - 0.005 <= bottom <= thickness + 0.02:
+            result['reason'] = 'bottle is not resting near the bin floor'
+            return result
+    result['verified'] = True
+    result['reason'] = 'physical lift and sustained placement inside bin observed'
+    return result
+
+
+class EpisodeRecorder:
+    def __init__(self, directory, domain, record_images=True):
+        self.context = self.node = self.executor = self.writer = None
+        self.images = None
+        try:
+            self._open(directory, domain, record_images)
+        except BaseException:
+            self.close()
+            raise
+
+    def _open(self, directory, domain, record_images):
+        # Lazy imports allow --prepare-only without a running ROS installation.
+        import rclpy
+        import rosbag2_py
+        from rosbag2_py._storage import QoS as BagQoS
+        from rclpy.context import Context
+        from rclpy.executors import SingleThreadedExecutor
+        from rclpy.node import Node
+        from rclpy.qos import DurabilityPolicy, QoSProfile, qos_profile_sensor_data
+        from rclpy.serialization import serialize_message
+        from rosidl_runtime_py.utilities import get_message
+
+        self.context = Context()
+        previous_log_dir = os.environ.get('ROS_LOG_DIR')
+        os.environ['ROS_LOG_DIR'] = str(directory / 'recorder_logs')
+        try:
+            rclpy.init(args=[], context=self.context, domain_id=domain)
+        finally:
+            if previous_log_dir is None:
+                os.environ.pop('ROS_LOG_DIR', None)
+            else:
+                os.environ['ROS_LOG_DIR'] = previous_log_dir
+        self.node = Node('bottle_demonstration_recorder', context=self.context)
+        self.executor = SingleThreadedExecutor(context=self.context)
+        self.executor.add_node(self.node)
+        self.writer = rosbag2_py.SequentialWriter()
+        self.writer.open(rosbag2_py.StorageOptions(uri=str(directory / 'bag'), storage_id='sqlite3'),
+                         rosbag2_py.ConverterOptions('', ''))
+        self.clock_ns = 0
+        self.counts = Counter()
+        self.active_counts = Counter()
+        self.recording_execution = False
+        self.bottle_samples = deque(maxlen=100_000)
+        self.first_joint_state = None
+        self.pending_static = None
+        self.subscriptions = []
+        if record_images:
+            self.images = MultiViewImages(directory)
+        specifications = [
+            ('/clock', 'rosgraph_msgs/msg/Clock'),
+            ('/joint_states', 'sensor_msgs/msg/JointState'),
+            ('/joint_trajectory_controller/controller_state', 'control_msgs/msg/JointTrajectoryControllerState'),
+            ('/gen3_lite_2f_gripper_controller/gripper_cmd/_action/feedback',
+             'control_msgs/action/GripperCommand_FeedbackMessage'),
+            ('/gen3_lite_2f_gripper_controller/gripper_cmd/_action/status', 'action_msgs/msg/GoalStatusArray'),
+            ('/tf', 'tf2_msgs/msg/TFMessage'), ('/tf_static', 'tf2_msgs/msg/TFMessage'),
+            (POSE_TOPIC, 'tf2_msgs/msg/TFMessage'),
+        ]
+        if record_images:
+            specifications += [(prefix + '/camera_info', 'sensor_msgs/msg/CameraInfo')
+                               for prefix in CAMERAS.values()]
+        for index, (topic, message_type) in enumerate(specifications):
+            latched = topic == '/tf_static' or topic.endswith('/status')
+            self.writer.create_topic(rosbag2_py.TopicMetadata(
+                id=index, name=topic, type=message_type, serialization_format='cdr',
+                offered_qos_profiles=[BagQoS(100).reliable().transient_local()] if latched else []))
+            qos = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL) if latched else qos_profile_sensor_data
+
+            def callback(message, topic=topic):
+                if topic == '/clock':
+                    self.clock_ns = message.clock.sec * 1_000_000_000 + message.clock.nanosec
+                if not self.clock_ns:
+                    if topic == '/tf_static':
+                        self.pending_static = message
+                    return
+                if self.pending_static is not None:
+                    self.writer.write('/tf_static', serialize_message(self.pending_static), self.clock_ns)
+                    self.counts['/tf_static'] += 1
+                    self.pending_static = None
+                self.writer.write(topic, serialize_message(message), self.clock_ns)
+                self.counts[topic] += 1
+                if self.recording_execution:
+                    self.active_counts[topic] += 1
+                if topic == '/joint_states' and self.first_joint_state is None:
+                    self.first_joint_state = {'joint_names': list(message.name), 'positions': list(message.position)}
+                if topic == '/joint_states' and self.images is not None:
+                    stamp = message.header.stamp
+                    self.images.add_joint_state(stamp.sec * 1_000_000_000 + stamp.nanosec,
+                                                message.name, message.position, message.velocity)
+                if topic.endswith('/camera_info') and self.images is not None:
+                    from rosidl_runtime_py.convert import message_to_ordereddict
+                    name = next(name for name, prefix in CAMERAS.items() if topic == prefix + '/camera_info')
+                    self.images.add_calibration(name, message_to_ordereddict(message))
+                if topic == POSE_TOPIC:
+                    for transform in message.transforms:
+                        if transform.child_frame_id.split('::')[-1].split('/')[-1] != BOTTLE:
+                            continue
+                        stamp = transform.header.stamp
+                        xyz = transform.transform.translation
+                        values = [xyz.x, xyz.y, xyz.z]
+                        if all(math.isfinite(value) for value in values):
+                            self.bottle_samples.append({
+                                'stamp_ns': stamp.sec * 1_000_000_000 + stamp.nanosec,
+                                'frame_id': transform.header.frame_id, 'xyz': values,
+                                'orientation_xyzw': [transform.transform.rotation.x,
+                                                     transform.transform.rotation.y,
+                                                     transform.transform.rotation.z,
+                                                     transform.transform.rotation.w]})
+
+            self.subscriptions.append(self.node.create_subscription(get_message(message_type), topic, callback, qos))
+        if record_images:
+            import cv2
+            from cv_bridge import CvBridge
+            from sensor_msgs.msg import CompressedImage, Image
+            bridge = CvBridge()
+            for index, (name, prefix) in enumerate(CAMERAS.items(), start=len(specifications)):
+                compressed_topic = prefix + '/color/image_raw/compressed'
+                self.writer.create_topic(rosbag2_py.TopicMetadata(
+                    id=index, name=compressed_topic, type='sensor_msgs/msg/CompressedImage', serialization_format='cdr'))
+
+                def image_callback(message, name=name, compressed_topic=compressed_topic):
+                    stamp = message.header.stamp
+                    stamp_ns = stamp.sec * 1_000_000_000 + stamp.nanosec
+                    if not self.clock_ns or not stamp_ns:
+                        return
+                    image = bridge.imgmsg_to_cv2(message, desired_encoding='bgr8')
+                    ok, jpeg = cv2.imencode('.jpg', image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+                    if not ok:
+                        raise RuntimeError('JPEG encoding failed for ' + name)
+                    payload = jpeg.tobytes()
+                    if not self.images.add_image(name, stamp_ns, message.header.frame_id,
+                                                 message.width, message.height, payload):
+                        return
+                    compressed = CompressedImage(header=message.header, format='jpeg', data=payload)
+                    self.writer.write(compressed_topic, serialize_message(compressed), self.clock_ns)
+                    self.counts[compressed_topic] += 1
+                    if self.recording_execution:
+                        self.active_counts[compressed_topic] += 1
+
+                self.subscriptions.append(self.node.create_subscription(
+                    Image, prefix + '/color/image_raw', image_callback, QoSProfile(depth=30)))
+
+    def spin(self):
+        self.executor.spin_once(timeout_sec=0.05)
+
+    def close(self):
+        if self.images is not None:
+            self.images.close()
+        if self.writer is not None:
+            self.writer.close()
+        if self.executor is not None:
+            self.executor.shutdown()
+        if self.node is not None:
+            self.node.destroy_node()
+        if self.context is not None and self.context.ok():
+            self.context.shutdown()
+
+
+def export_solution(directory):
+    from moveit_task_constructor_msgs.msg import Solution, TaskDescription
+    from rclpy.serialization import deserialize_message
+    from rosidl_runtime_py.convert import message_to_ordereddict
+    for name, message_type in [('solution', Solution), ('task_description', TaskDescription)]:
+        path = directory / (name + '.cdr')
+        if path.exists():
+            write_json(directory / (name + '.json'), message_to_ordereddict(
+                deserialize_message(path.read_bytes(), message_type)))
+
+
+def run_episode(directory, args, metadata, domain):
+    from robot_bringup.pick_console import stop_demo
+    partition = 'bottle_collection_' + uuid.uuid4().hex
+    env = dict(os.environ, GZ_PARTITION=partition, ROS_DOMAIN_ID=str(domain),
+               ROS_LOG_DIR=str(directory / 'ros_logs'))
+    recorder = EpisodeRecorder(directory, domain, record_images=not args.no_images)
+    processes = []
+    status = {}
+    failure = None
+    metadata.update(ros_domain_id=domain, gz_partition=partition, status='running')
+    write_json(directory / 'metadata.json', metadata)
+    try:
+        with (directory / 'launch.log').open('w') as log:
+            commands = [
+                ['ros2', 'run', 'ros_gz_bridge', 'parameter_bridge',
+                 POSE_TOPIC + '@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V'],
+                ['ros2', 'launch', 'robot_bringup', 'demo.launch.py', 'robot:=kinova_gen3_lite',
+                 'scene_source:=known', 'interactive:=false', 'use_rviz:=false',
+                 f'record_images:={str(not args.no_images).lower()}',
+                 f'headless:={str(not args.gui).lower()}', f'execute:={str(not args.plan_only).lower()}',
+                 'world_file:=' + str(directory / 'world.sdf'),
+                 'task_params_file:=' + str(directory / 'task.yaml')],
+            ]
+            for command in commands:
+                processes.append(subprocess.Popen(command, env=env, stdout=log,
+                                                  stderr=subprocess.STDOUT, start_new_session=True))
+            deadline = time.monotonic() + args.timeout
+            report_at = time.monotonic() + 30
+            while time.monotonic() < deadline:
+                recorder.spin()
+                path = directory / 'task_status.json'
+                if path.exists():
+                    status = json.loads(path.read_text())
+                    recorder.recording_execution = status['state'] == 'executing'
+                    if status['state'] == 'execution_failed':
+                        failure = 'MoveIt reported execution failure'
+                        break
+                    if args.plan_only and status['state'] == 'planned':
+                        break
+                    if status['state'] == 'executed' and recorder.clock_ns >= (
+                            status['execution_end_ns'] + int((args.hold_seconds + 0.2) * 1e9)):
+                        break
+                if any(process.poll() is not None for process in processes):
+                    failure = 'simulation or pose bridge exited; see launch.log'
+                    break
+                if time.monotonic() >= report_at:
+                    print(f'  {directory.name}: {status.get("state", "starting / planning")}, '
+                          f'{recorder.counts["/joint_states"]} joint-state messages', flush=True)
+                    report_at = time.monotonic() + 30
+            else:
+                failure = f'episode timed out after {args.timeout:g} wall seconds'
+            # Hold verification runs before shutdown; shutdown crashes cannot become success labels.
+            export_solution(directory)
+            metadata.update(task_status=status, topic_counts=dict(recorder.counts),
+                            execution_topic_counts=dict(recorder.active_counts),
+                            initial_joint_state=recorder.first_joint_state)
+            metadata['planning_success'] = (directory / 'solution.cdr').exists()
+            metadata['execution_success'] = status.get('state') == 'executed'
+            metadata['placement_check'] = verify_delivery(
+                list(recorder.bottle_samples), status.get('execution_start_ns', 0),
+                status.get('execution_end_ns', 0), args.hold_seconds, args.minimum_lift,
+                metadata['object_pose_xyz_rpy'], metadata['bin_pose_xyz_rpy'],
+                metadata['bin_dimensions_xyz'], metadata['bin_wall_thickness']) if metadata['execution_success'] else {
+                    'verified': False, 'reason': 'no successful execution'}
+            required = ['/joint_states', '/joint_trajectory_controller/controller_state', POSE_TOPIC]
+            if recorder.images is not None:
+                metadata['image_check'] = recorder.images.quality(
+                    status.get('execution_start_ns', 0), status.get('execution_end_ns', 0))
+                recorder.images.write_preview(status.get('execution_start_ns', 0), status.get('execution_end_ns', 0))
+            metadata['training_candidate'] = bool(
+                not args.plan_only and not failure and metadata['execution_success'] and
+                metadata['placement_check']['verified'] and
+                (recorder.images is None or metadata['image_check']['verified']) and
+                all(recorder.active_counts[topic] > 1 for topic in required))
+            metadata['status'] = ('plan_only' if args.plan_only and metadata['planning_success'] and not failure
+                                  else 'placement_verified' if metadata['training_candidate'] else 'failed')
+            metadata['failure'] = failure
+            write_json(directory / 'bottle_poses.json', list(recorder.bottle_samples))
+    except BaseException as error:
+        metadata.update(status='interrupted' if isinstance(error, KeyboardInterrupt) else 'failed',
+                        failure=str(error) or type(error).__name__, training_candidate=False)
+        raise
+    finally:
+        for process in reversed(processes):
+            stop_demo(process, partition)
+        recorder.close()
+        write_json(directory / 'metadata.json', metadata)
+    return metadata
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description='Collect bottle-to-bin demonstrations in the original multi-object world')
+    parser.add_argument('--episodes', type=int, default=10, help='Number of attempts, including failures')
+    parser.add_argument('--output', type=Path, default=Path('datasets/bottle_pick_place_rgb'))
+    parser.add_argument('--staging-root', type=Path, default=Path('/tmp'),
+                        help='Fast Linux filesystem for one temporary episode; final data goes to --output')
+    parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--center-x', type=float, default=0.35)
+    parser.add_argument('--center-y', type=float, default=0.15)
+    parser.add_argument('--xy-jitter', type=float, default=0.02, help='Uniform +/- offset per axis, metres')
+    parser.add_argument('--timeout', type=float, default=240.0, help='Wall seconds per attempt')
+    parser.add_argument('--hold-seconds', type=float, default=1.0, help='Simulation seconds to verify bottle stays in bin')
+    parser.add_argument('--minimum-lift', type=float, default=0.03, help='Minimum observed bottle lift, metres')
+    parser.add_argument('--domain-id', type=int, help='Isolated ROS domain; default random 100..199')
+    parser.add_argument('--gui', action='store_true', help='Show Gazebo (RViz stays disabled)')
+    parser.add_argument('--no-images', action='store_true', help='Disable all three cameras for state-only data')
+    parser.add_argument('--plan-only', action='store_true', help='Collect planned solutions without execution')
+    parser.add_argument('--prepare-only', action='store_true', help='Generate episode inputs without starting ROS/Gazebo')
+    args = parser.parse_args(argv)
+    if args.episodes < 1 or (args.domain_id is not None and not 0 <= args.domain_id <= 232):
+        parser.error('episodes must be positive; domain-id must be in 0..232')
+    for name in ('center_x', 'center_y', 'xy_jitter', 'timeout', 'hold_seconds', 'minimum_lift'):
+        if not math.isfinite(getattr(args, name)):
+            parser.error(f'{name} must be finite')
+    if args.xy_jitter < 0 or args.timeout <= 0 or args.hold_seconds < 0.5 or args.minimum_lift <= 0:
+        parser.error('jitter must be nonnegative, timeout/lift positive, hold-seconds at least 0.5')
+    # Keep the first dataset in a small, known clear region of the support surface.
+    if not (0.25 <= args.center_x - args.xy_jitter <= args.center_x + args.xy_jitter <= 0.45 and
+            0.05 <= args.center_y - args.xy_jitter <= args.center_y + args.xy_jitter <= 0.25):
+        parser.error('the entire XY sampling region must be within x=[0.25,0.45], y=[0.05,0.25] metres')
+    from ament_index_python.packages import get_package_share_directory
+    source = Path(get_package_share_directory('kinova_gen3_lite_support')) / 'worlds/pick_place.sdf'
+    session = args.output.expanduser().resolve() / (
+        datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ') + '_' + uuid.uuid4().hex[:8])
+    staging_root = args.staging_root.expanduser().resolve()
+    if staging_root == Path('/mnt') or Path('/mnt') in staging_root.parents:
+        parser.error('staging-root must use the Linux filesystem, not a /mnt Windows mount')
+    staging_root.mkdir(parents=True, exist_ok=True)
+    capture_root = Path(tempfile.mkdtemp(prefix='bottle_capture_', dir=staging_root))
+    rng = random.Random(args.seed)
+    domain = args.domain_id if args.domain_id is not None else random.SystemRandom().randrange(100, 200)
+    summary = []
+    print(f'Task: {TASK_TEXT}\nDataset: {session}\nLocal capture: {capture_root}\n'
+          f'Gazebo only; mode={"prepare" if args.prepare_only else "plan" if args.plan_only else "execute"}', flush=True)
+    for index in range(args.episodes):
+        pose = [args.center_x + rng.uniform(-args.xy_jitter, args.xy_jitter),
+                args.center_y + rng.uniform(-args.xy_jitter, args.xy_jitter), 0.06, 0.0, 0.0, 0.0]
+        directory = capture_root / f'episode_{index:04d}'
+        destination = session / directory.name
+        scene_metadata = prepare_episode(directory, source, pose)
+        metadata = dict(schema_version=3, task_text=TASK_TEXT, task_type='pick_place_into_bin',
+                        robot='kinova_gen3_lite', object_name=BOTTLE, object_pose_xyz_rpy=pose,
+                        object_dimensions_height_radius=[0.12, 0.018], planning_frame='base_link',
+                        physical_pose_frame='default', scene_source='known', yoloe_enabled=False,
+                        planning_pipeline='ompl', planner_id='RRTConnectkConfigDefault',
+                        seed=args.seed, episode_index=index, status='prepared', training_candidate=False,
+                        simulation_only=True, plan_only=args.plan_only,
+                        xy_jitter_m=args.xy_jitter)
+        metadata['cameras'] = {} if args.no_images else {
+            name: {'image_topic': prefix + '/color/image_raw', 'camera_info_topic': prefix + '/camera_info',
+                   'compressed_topic': prefix + '/color/image_raw/compressed',
+                   'width': 640, 'height': 480, 'fps': 10, 'jpeg_quality': 90}
+            for name, prefix in CAMERAS.items()}
+        metadata['image_sync'] = {'maximum_camera_skew_ns': 20_000_000, 'maximum_joint_state_age_ns': 50_000_000}
+        metadata.update(scene_metadata)
+        metadata['storage'] = {'state': 'capturing', 'capture_directory': str(directory),
+                               'destination_directory': str(destination)}
+        write_json(directory / 'metadata.json', metadata)
+        print(f'[{index + 1}/{args.episodes}] bottle XY=({pose[0]:.4f}, {pose[1]:.4f})', flush=True)
+        interrupted = False
+        if not args.prepare_only:
+            try:
+                metadata = run_episode(directory, args, metadata, domain)
+            except KeyboardInterrupt:
+                metadata.update(status='interrupted', training_candidate=False)
+                write_json(directory / 'metadata.json', metadata)
+                print('Interrupted; saving partial episode to the dataset.', flush=True)
+                interrupted = True
+            except Exception as error:
+                metadata.update(status='failed', failure=str(error), training_candidate=False)
+                write_json(directory / 'metadata.json', metadata)
+                print(f'  Error: {error}', flush=True)
+        # ROS callbacks and the bag writer have stopped. Cross-filesystem copy
+        # can now take as long as necessary without dropping sensor messages.
+        print(f'  Saving {directory.name} to {destination}', flush=True)
+        try:
+            metadata = archive_episode(directory, destination)
+        except BaseException as error:
+            print(f'  Save failed: {str(error) or type(error).__name__}. '
+                  f'Local data retained at {directory}; collection stopped.', flush=True)
+            return 130 if isinstance(error, KeyboardInterrupt) else 1
+        try:
+            shutil.rmtree(directory)
+        except OSError as error:
+            print(f'  Dataset saved, but local cleanup failed: {error}. '
+                  f'Collection stopped; local data at {directory}', flush=True)
+            return 1
+        summary.append({'episode': directory.name, 'status': metadata['status'],
+                        'training_candidate': metadata['training_candidate']})
+        write_json(session / 'summary.json', summary)
+        print(f'  {metadata["status"]}', flush=True)
+        if metadata['status'] == 'failed':
+            print('  ' + str(metadata.get('failure') or
+                            (metadata.get('image_check', {}).get('reason') if not metadata.get('image_check', {}).get('verified', True) else None) or
+                            metadata.get('placement_check', {}).get('reason') or
+                            'missing required execution feedback'), flush=True)
+        if interrupted:
+            capture_root.rmdir()
+            return 130
+    capture_root.rmdir()
+    good = sum(item['training_candidate'] for item in summary)
+    print(f'Finished: {good}/{args.episodes} verified bottle-to-bin candidates. Dataset: {session}', flush=True)
+    return 0 if args.prepare_only or (args.plan_only and all(
+        item['status'] == 'plan_only' for item in summary)) or good == args.episodes else 1
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())

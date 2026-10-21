@@ -8,7 +8,7 @@ import yaml
 from .profile import ProfileError, package_file, load_ros_parameters, resource, task_parameters
 
 
-def prepare_configuration(profile, runtime_dir, scene_source, use_camera):
+def prepare_configuration(profile, runtime_dir, scene_source, use_camera, demonstration_cameras=False):
     runtime = Path(runtime_dir)
     moveit = profile['moveit']
     file = lambda name: package_file(moveit['package'], moveit['files'][name], 'moveit.files.' + name)
@@ -23,6 +23,10 @@ def prepare_configuration(profile, runtime_dir, scene_source, use_camera):
     controller_file = runtime / 'ros2_controllers.yaml'
     controller_file.write_text(template)
     mappings.update(use_gazebo='true', use_camera=str(use_camera).lower(), controllers_file=str(controller_file))
+    if demonstration_cameras:
+        if profile['robot_id'] != 'kinova_gen3_lite' or not use_camera:
+            raise ProfileError('Three-view demonstration cameras require Kinova with use_camera=true')
+        mappings['use_demonstration_cameras'] = 'true'
     model_file = package_file(description['package'], description['xacro_file'], 'robot_description.xacro_file')
     urdf = xacro.process_file(str(model_file), mappings=mappings).toxml()
     urdf_file = runtime / 'robot_description.urdf'

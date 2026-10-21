@@ -8,6 +8,7 @@ from moveit_msgs.srv import ApplyPlanningScene, GetPlanningScene
 from robot_task_interfaces.srv import GetPlanningScene as PerceptionScene
 from sensor_msgs.msg import JointState, PointCloud2, Image
 from tf2_ros import Buffer, TransformListener
+from rclpy.qos import qos_profile_sensor_data
 
 
 def main(args=None):
@@ -17,6 +18,7 @@ def main(args=None):
                 'joint_names': [''], 'base_frame': '', 'ik_frame': '', 'timeout': 120.0,
                 'scene_source': 'known', 'scene_service_name': '/perception/get_planning_scene',
                 'point_cloud_topic': '/camera/depth/points', 'rgb_image_topic': '/camera/color/image_raw'}
+    defaults['required_image_topics'] = ['']
     for name, value in defaults.items():
         node.declare_parameter(name, value)
     value = lambda name: node.get_parameter(name).value
@@ -26,6 +28,13 @@ def main(args=None):
     sensors = set()
     subscriptions = [node.create_subscription(JointState, '/joint_states',
                      lambda msg: joints.update(msg.name) if msg.position else None, 10)]
+    image_counts = {}
+    for topic in filter(None, value('required_image_topics')):
+        image_counts[topic] = 0
+        def image_ready(msg, topic=topic):
+            if msg.width > 0 and msg.height > 0 and msg.data:
+                image_counts[topic] += 1
+        subscriptions.append(node.create_subscription(Image, topic, image_ready, qos_profile_sensor_data))
     if value('scene_source') == 'perception':
         subscriptions.extend([
             node.create_subscription(PointCloud2, value('point_cloud_topic'),
@@ -88,6 +97,9 @@ def main(args=None):
                     missing.append('service ' + service.srv_name)
             if value('scene_source') == 'perception' and sensors != {'pointcloud', 'image'}:
                 missing.append('nonempty pointcloud/RGB image')
+            for topic, count in image_counts.items():
+                if count < 2:
+                    missing.append('two RGB frames on ' + topic)
             if not missing:
                 node.get_logger().info('[Readiness] Controllers, joint states, TF, clock and scene services are ready')
                 success = True

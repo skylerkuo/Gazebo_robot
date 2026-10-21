@@ -46,6 +46,8 @@
 #include <algorithm>
 #include <cmath>
 #include <future>
+#include <filesystem>
+#include <fstream>
 #include <mutex>
 #include <set>
 #include <stdexcept>
@@ -62,6 +64,8 @@
 #include <numeric>
 #include <string>
 #include <vector>
+#include <rclcpp/serialization.hpp>
+#include <moveit/task_constructor/introspection.h>
 
 // Handling the GetPlanningScene service
 #include "robot_task_core/get_planning_scene_client.h"
@@ -157,6 +161,9 @@ private:
   void validateFrame(const std::string& frame, const std::string& parameter);
   void checkExecutionControllers();
   void appendCollectionBin();
+  void saveDemonstration(const std::string& state, int code = 0);
+  int64_t execution_start_ns_ = 0;
+  int64_t execution_end_ns_ = 0;
 
   void updateObjectParameters(const moveit_msgs::msg::CollisionObject& collision_object);
 
@@ -204,6 +211,9 @@ MTCTaskNode::MTCTaskNode(const rclcpp::NodeOptions& options)
   declare_parameter("support_surface_dimensions", std::vector<double>{}, "Support BOX [x,y,z]");
   declare_parameter("support_surface_pose", std::vector<double>{}, "Support center pose");
   declare_parameter("execute", false, "Whether to execute the planned task");
+  declare_parameter("pick_only", false, "Finish after grasp and lift, keeping the object attached");
+  declare_parameter("demonstration_directory", "", "Optional directory for selected solution and task status");
+  declare_parameter("known_obstacles_file", "", "Optional serialized PlanningSceneWorld with additional known obstacles");
   declare_parameter("interactive", false, "Wait for one RunPickPlace request per task");
   declare_parameter("command_service_name", "/pick_place/run", "Repeated task command service");
   declare_parameter("max_solutions", 25, "Maximum number of solutions to compute");
@@ -498,6 +508,24 @@ void MTCTaskNode::setupSceneFromKnownObjects()
     make_object(support_surface_id_, get_parameter("support_surface_reference_frame").as_string(), Primitive::BOX,
                 get_parameter("support_surface_dimensions").as_double_array(), get_parameter("support_surface_pose").as_double_array())
   };
+  const auto obstacles_file = get_parameter("known_obstacles_file").as_string();
+  if (!obstacles_file.empty()) {
+    std::ifstream file(obstacles_file, std::ios::binary | std::ios::ate);
+    if (!file || file.tellg() <= 0 || file.tellg() > 16 * 1024 * 1024)
+      throw std::runtime_error("[Scene] Invalid known_obstacles_file: " + obstacles_file);
+    const size_t size = static_cast<size_t>(file.tellg());
+    file.seekg(0);
+    rclcpp::SerializedMessage serialized(size);
+    auto& bytes = serialized.get_rcl_serialized_message();
+    if (!file.read(reinterpret_cast<char*>(bytes.buffer), size))
+      throw std::runtime_error("[Scene] Could not read known_obstacles_file");
+    bytes.buffer_length = size;
+    moveit_msgs::msg::PlanningSceneWorld obstacles;
+    rclcpp::Serialization<moveit_msgs::msg::PlanningSceneWorld> serializer;
+    serializer.deserialize_message(&serialized, &obstacles);
+    scene_world_.collision_objects.insert(scene_world_.collision_objects.end(),
+                                         obstacles.collision_objects.begin(), obstacles.collision_objects.end());
+  }
   RCLCPP_INFO(get_logger(), "[Scene] known: built target '%s' and support '%s'; no perception client created",
               target_object_id_.c_str(), support_surface_id_.c_str());
 }
@@ -533,14 +561,18 @@ void MTCTaskNode::setupPlanningScene(const std::string& target_label)
   if (get_parameter("scene_source").as_string() == "known") setupSceneFromKnownObjects();
   else setupSceneFromPerception(target_label);
   if (get_parameter("drop_into_bin").as_bool()) appendCollectionBin();
+  std::set<std::string> scene_ids;
   for (const auto& object : scene_world_.collision_objects) {
+    if (!scene_ids.insert(object.id).second)
+      throw std::runtime_error("[Scene] Duplicate collision object ID: " + object.id);
     validateFrame(object.header.frame_id, "collision_object[" + object.id + "].frame");
     if (object.id.empty() || object.operation != moveit_msgs::msg::CollisionObject::ADD ||
         object.primitives.empty() || object.primitives.size() != object.primitive_poses.size())
       throw std::runtime_error("[Scene] Invalid collision object '" + object.id + "'");
     for (const auto& primitive : object.primitives) {
       const size_t count = primitive.type == shape_msgs::msg::SolidPrimitive::BOX ? 3 :
-          primitive.type == shape_msgs::msg::SolidPrimitive::CYLINDER ? 2 : 0;
+          primitive.type == shape_msgs::msg::SolidPrimitive::CYLINDER ? 2 :
+          primitive.type == shape_msgs::msg::SolidPrimitive::SPHERE ? 1 : 0;
       if (!count || primitive.dimensions.size() != count ||
           !std::all_of(primitive.dimensions.begin(), primitive.dimensions.end(),
                        [](double value) { return std::isfinite(value) && value > 0.0; }))
@@ -677,6 +709,43 @@ void MTCTaskNode::checkExecutionControllers()
 /**
  * @brief Plan and/or execute the pick and place task.
  */
+void MTCTaskNode::saveDemonstration(const std::string& state, int code)
+{
+  const auto directory = get_parameter("demonstration_directory").as_string();
+  if (directory.empty()) return;
+  const std::filesystem::path root(directory);
+  std::filesystem::create_directories(root);
+  // Preserve the exact selected solution, including scene diffs and gripper
+  // trajectories. CDR can be deserialized by the matching ROS message version.
+  if (state == "planned") {
+    auto write_message = [&root](const std::string& name, const auto& message) {
+      using Message = std::decay_t<decltype(message)>;
+      rclcpp::Serialization<Message> serializer;
+      rclcpp::SerializedMessage serialized;
+      serializer.serialize_message(&message, &serialized);
+      const auto& bytes = serialized.get_rcl_serialized_message();
+      std::ofstream file(root / name, std::ios::binary);
+      file.exceptions(std::ios::failbit | std::ios::badbit);
+      file.write(reinterpret_cast<const char*>(bytes.buffer), bytes.buffer_length);
+    };
+    moveit_task_constructor_msgs::msg::Solution solution;
+    task_.solutions().front()->toMsg(solution, &task_.introspection());
+    write_message("solution.cdr", solution);
+    moveit_task_constructor_msgs::msg::TaskDescription description;
+    task_.introspection().fillTaskDescription(description);
+    write_message("task_description.cdr", description);
+  }
+  // Rename only after close, so the collector never sees a partial status file.
+  {
+    std::ofstream file(root / "task_status.json.tmp");
+    file.exceptions(std::ios::failbit | std::ios::badbit);
+    file << "{\"state\":\"" << state << "\",\"moveit_error_code\":" << code
+         << ",\"execution_start_ns\":" << execution_start_ns_
+         << ",\"execution_end_ns\":" << execution_end_ns_ << "}\n";
+  }
+  std::filesystem::rename(root / "task_status.json.tmp", root / "task_status.json");
+}
+
 void MTCTaskNode::doTask()
 {
   if (!scene_ready_) throw std::runtime_error("[Scene] Cannot plan without a valid scene");
@@ -727,19 +796,25 @@ void MTCTaskNode::doTask()
   // Publish the planned solution for visualization
   task_.introspection().publishSolution(*task_.solutions().front());
   RCLCPP_INFO(this->get_logger(), "Published solution for visualization");
+  saveDemonstration("planned");
 
   if (execute)
   {
     checkExecutionControllers();
     // Execute the planned task
     RCLCPP_INFO(this->get_logger(), "Executing the planned task");
+    execution_start_ns_ = now().nanoseconds();
+    saveDemonstration("executing");
     auto result = task_.execute(*task_.solutions().front());
+    execution_end_ns_ = now().nanoseconds();
+    saveDemonstration(result.val == moveit_msgs::msg::MoveItErrorCodes::SUCCESS ?
+                      "executed" : "execution_failed", result.val);
     if (result.val != moveit_msgs::msg::MoveItErrorCodes::SUCCESS)
     {
       throw std::runtime_error("[MTC execution] Failed with code " + std::to_string(result.val));
     }
     RCLCPP_INFO(this->get_logger(), "Task executed successfully");
-    if (get_parameter("drop_into_bin").as_bool()) {
+    if (get_parameter("drop_into_bin").as_bool() && !get_parameter("pick_only").as_bool()) {
       // The released object falls under gravity; do not retain a floating estimate.
       moveit_msgs::msg::CollisionObject remove;
       remove.id = target_object_id_;
@@ -1083,6 +1158,7 @@ mtc::Task MTCTaskNode::createTask()
       // and lifting the object
       task.add(std::move(grasp));
   }
+  if (get_parameter("pick_only").as_bool()) return task;
   /******************************************************
    *                                                    *
    *          Move to Place                             *

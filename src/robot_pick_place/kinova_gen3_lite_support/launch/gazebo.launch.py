@@ -49,6 +49,12 @@ def setup(context):
                     '/camera_head/points@sensor_msgs/msg/PointCloud2[gz.msgs.PointCloudPacked']
         remaps = [('/camera_head/image', '/camera_head/color/image_raw'),
                   ('/camera_head/points', '/camera_head/depth/color/points')]
+    if get('record_images') == 'true':
+        bridges += ['/camera_head/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo']
+        for name in ('wrist', 'side'):
+            bridges += [f'/camera_{name}/image@sensor_msgs/msg/Image[gz.msgs.Image',
+                        f'/camera_{name}/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo']
+            remaps.append((f'/camera_{name}/image', f'/camera_{name}/color/image_raw'))
     bridge = Node(package='ros_gz_bridge', executable='parameter_bridge', arguments=bridges,
                   remappings=remaps, parameters=[{'use_sim_time': sim}], output='screen')
     return [AppendEnvironmentVariable('GZ_SIM_RESOURCE_PATH', str(Path(get_package_share_directory('kortex_description')).parent)),
@@ -61,6 +67,7 @@ def generate_launch_description():
         DeclareLaunchArgument('world_file', default_value='pick_place.sdf'),
         DeclareLaunchArgument('headless', default_value='false'),
         DeclareLaunchArgument('use_camera', default_value='false'),
+        DeclareLaunchArgument('record_images', default_value='false'),
         DeclareLaunchArgument('use_sim_time', default_value='true'),
         OpaqueFunction(function=setup),
     ])

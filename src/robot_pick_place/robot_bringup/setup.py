@@ -15,5 +15,7 @@ setup(
     description='Profile-based integration of robot simulation, MoveIt and generic tasks.',
     license='BSD-3-Clause',
     entry_points={'console_scripts': ['wait_ready = robot_bringup.readiness:main',
+                                     'collect_bottle = robot_bringup.collect_bottle:main',
+                                     'act_rollout = robot_bringup.act_rollout:main',
                                      'pick_console = robot_bringup.pick_console:main']},
 )

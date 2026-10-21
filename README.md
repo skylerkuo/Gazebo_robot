@@ -8,6 +8,19 @@ Kinova 現可用 `perception_method:=geometry`（預設）或 `perception_method
 選擇原本的形狀／尺寸匹配或 YOLOE 辨識；兩者共用同一套 MTC。
 AI 環境安裝、啟動指令與限制見 [AI 辨識模式](docs/ai_perception.md)。
 
+飲料瓶模仿學習示範可用 `ros2 run robot_bringup collect_bottle --episodes 10` 收集：
+沿用原本多物體場景，既有規劃器只抓取飲料瓶並放進箱子，每回合只有瓶子起始位置小幅變動，記錄固定文字
+`pick up drink bottle`、軌跡與實際狀態。使用方式與資料格式見
+[飲料瓶資料收集](docs/bottle_demonstrations.md)。
+收集器預設也保存三路 640×480／10 FPS RGB：原場景視角、夾爪腕部視角與另一側視角，
+並產生對齊關節狀態的 `frames.jsonl`；預設資料目錄為 `datasets/bottle_pick_place_rgb/`。
+可用 `--output /mnt/d/robot_datasets/bottle_pick_place_rgb` 存到 D 槽；
+程式會先在 Linux 暫存一回合，停止模擬後再轉存，避免跨磁碟寫檔造成感測資料缺口。
+可使用 [ACT 訓練程式](docs/act_training.md) 直接讀取這些資料，以三視角 RGB 與當前 7 維關節狀態
+預測未來的關節／夾爪位置序列，不需要輸入最終姿態。
+目前預設為微調 ResNet18 的中型 ACT（約 2187 萬參數），新訓練與推理使用 format 2 checkpoint。
+訓練後可依 [Gazebo ACT 執行](docs/act_gazebo.md) 開啟相同三視角場景，載入模型直接控制模擬手臂與夾爪。
+
 AI 可在終端逐次輸入物品名稱：`ros2 run robot_bringup pick_console --robot kinova_gen3_lite --execute`。
 每次輸入後才擷取 RGB／深度、辨識、規劃及執行，完成後繼續等待；省略 `--execute` 僅規劃。
 Kinova 現場景含開口收集箱，預設在箱口上方釋放物品，由重力落入箱內。

@@ -1,0 +1,8 @@
+# Install a matching GPU torch/torchvision pair first, using the official
+# PyTorch CUDA wheel index. See docs/act_training.md. These are optional and
+# must not be installed into the ROS system Python just to collect datasets.
+# The existing .venv shares ROS packages: keep NumPy 1.x for Jazzy cv_bridge.
+torch>=2.7
+torchvision>=0.22
+numpy>=1.26,<2
+Pillow>=10
