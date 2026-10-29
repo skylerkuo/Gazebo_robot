@@ -1,9 +1,0 @@
-# Preserve the original identification dimensions and placement settings.
-mtc_node:
-  ros__parameters:
-    object_name: object
-    object_type: cylinder
-    object_reference_frame: base_link
-    object_dimensions: [0.35, 0.0125]
-    object_pose: [0.22, 0.12, 0.0, 0.0, 0.0, 0.0]
-    place_pose: [-0.183, -0.14, 0.0, 0.0, 0.0, 0.0]

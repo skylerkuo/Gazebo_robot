@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="330" viewBox="0 0 640 330">
+<rect width="100%" height="100%" rx="16" fill="#f8fafc"/>
+<g font-family="system-ui,sans-serif" fill="#172033">
+<text x="24" y="34" font-size="21" font-weight="700">ACT behavior-cloning loss</text>
+<line x1="76" y1="70.0" x2="612" y2="70.0" stroke="#dce3ed"/>
+<text x="67" y="75.0" text-anchor="end" font-size="13">2.2</text>
+<line x1="76" y1="120.0" x2="612" y2="120.0" stroke="#dce3ed"/>
+<text x="67" y="125.0" text-anchor="end" font-size="13">1.6</text>
+<line x1="76" y1="170.0" x2="612" y2="170.0" stroke="#dce3ed"/>
+<text x="67" y="175.0" text-anchor="end" font-size="13">1.1</text>
+<line x1="76" y1="220.0" x2="612" y2="220.0" stroke="#dce3ed"/>
+<text x="67" y="225.0" text-anchor="end" font-size="13">0.53</text>
+<line x1="76" y1="270.0" x2="612" y2="270.0" stroke="#dce3ed"/>
+<text x="67" y="275.0" text-anchor="end" font-size="13">-0.016</text>
+<text x="76.0" y="293" text-anchor="middle" font-size="13">1</text>
+<text x="344.0" y="293" text-anchor="middle" font-size="13">1,226</text>
+<text x="612.0" y="293" text-anchor="middle" font-size="13">2,450</text>
+<polyline points="76.00,83.79 86.72,171.29 97.67,218.13 108.61,222.73 119.55,227.63 130.50,231.76 141.44,232.88 152.38,234.52 163.33,234.32 174.27,234.89 185.21,238.42 196.16,237.99 207.10,240.05 218.04,242.55 228.99,244.19 239.93,245.07 250.87,246.01 261.82,246.00 272.76,246.31 283.70,246.52 294.65,248.27 305.59,247.96 316.53,248.58 327.48,248.65 338.42,249.54 349.36,249.70 360.31,250.32 371.25,250.00 382.19,250.08 393.14,250.62 404.08,251.04 415.02,251.32 425.96,251.08 436.91,251.60 447.85,251.55 458.79,252.03 469.74,252.36 480.68,252.54 491.62,252.83 502.57,252.95 513.51,253.92 524.45,254.28 535.40,254.75 546.34,255.10 557.28,255.30 568.23,255.42 579.17,255.52 590.11,255.90 601.06,256.09 612.00,256.21" fill="none" stroke="#087f8c" stroke-width="2.6" stroke-linejoin="round"/>
+<circle cx="612.00" cy="256.21" r="4" fill="#087f8c"/>
+<text x="24" y="319" font-size="14" fill="#087f8c">ACT BC</text>
+<text x="76" y="58" font-size="12">common-scale loss</text>
+</g></svg>

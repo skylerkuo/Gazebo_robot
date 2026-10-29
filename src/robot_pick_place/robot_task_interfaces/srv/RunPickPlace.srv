@@ -1,6 +1,0 @@
-# One request runs one complete task; overlapping requests are rejected.
-string target_label
----
-bool success
-bool executed
-string message
