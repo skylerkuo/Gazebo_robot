@@ -7,19 +7,19 @@
 <line x1="76" y1="120.0" x2="612" y2="120.0" stroke="#dce3ed"/>
 <text x="67" y="125.0" text-anchor="end" font-size="13">72</text>
 <line x1="76" y1="170.0" x2="612" y2="170.0" stroke="#dce3ed"/>
-<text x="67" y="175.0" text-anchor="end" font-size="13">47</text>
+<text x="67" y="175.0" text-anchor="end" font-size="13">46</text>
 <line x1="76" y1="220.0" x2="612" y2="220.0" stroke="#dce3ed"/>
-<text x="67" y="225.0" text-anchor="end" font-size="13">22</text>
+<text x="67" y="225.0" text-anchor="end" font-size="13">21</text>
 <line x1="76" y1="270.0" x2="612" y2="270.0" stroke="#dce3ed"/>
-<text x="67" y="275.0" text-anchor="end" font-size="13">-2.9</text>
+<text x="67" y="275.0" text-anchor="end" font-size="13">-3.9</text>
 <text x="76.0" y="293" text-anchor="middle" font-size="13">0</text>
-<text x="344.0" y="293" text-anchor="middle" font-size="13">1,000</text>
-<text x="612.0" y="293" text-anchor="middle" font-size="13">2,000</text>
-<polyline points="76.00,85.82 210.00,250.97 344.00,255.80 478.00,255.60 612.00,256.21" fill="none" stroke="#087f8c" stroke-width="2.6" stroke-linejoin="round"/>
+<text x="344.0" y="293" text-anchor="middle" font-size="13">1,250</text>
+<text x="612.0" y="293" text-anchor="middle" font-size="13">2,500</text>
+<polyline points="76.00,85.79 183.20,249.23 290.40,254.01 397.60,253.81 504.80,254.41 612.00,256.21" fill="none" stroke="#087f8c" stroke-width="2.6" stroke-linejoin="round"/>
 <circle cx="612.00" cy="256.21" r="4" fill="#087f8c"/>
 <text x="24" y="319" font-size="14" fill="#087f8c">ACT</text>
-<polyline points="76.00,83.79 210.00,243.85 344.00,252.34 478.00,253.41 612.00,255.79" fill="none" stroke="#c56a13" stroke-width="2.6" stroke-linejoin="round"/>
-<circle cx="612.00" cy="255.79" r="4" fill="#c56a13"/>
+<polyline points="76.00,83.79 183.20,242.18 290.40,250.58 397.60,251.64 504.80,254.00 612.00,255.60" fill="none" stroke="#c56a13" stroke-width="2.6" stroke-linejoin="round"/>
+<circle cx="612.00" cy="255.60" r="4" fill="#c56a13"/>
 <text x="254" y="319" font-size="14" fill="#c56a13">ACT + Flow</text>
 <text x="76" y="58" font-size="12">mm</text>
 </g></svg>
