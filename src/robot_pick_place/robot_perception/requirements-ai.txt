@@ -1,5 +1,0 @@
-# Install into a --system-site-packages virtual environment, not the ROS system Python.
-# Install CPU torch/torchvision first from https://download.pytorch.org/whl/cpu when no CUDA is needed.
-numpy>=1.26,<2
-opencv-python>=4.8,<4.12
-ultralytics>=8.4.0,<9

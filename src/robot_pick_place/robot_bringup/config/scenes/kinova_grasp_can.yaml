@@ -1,7 +1,0 @@
-# Optional target override for the household-prop scene; works with perception or known.
-mtc_node:
-  ros__parameters:
-    object_name: drink_can
-    object_type: cylinder
-    object_dimensions: [0.1, 0.02]
-    object_pose: [0.30, -0.02, 0.05, 0.0, 0.0, 0.0]

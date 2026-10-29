@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="330" viewBox="0 0 640 330">
+<rect width="100%" height="100%" rx="16" fill="#f8fafc"/>
+<g font-family="system-ui,sans-serif" fill="#172033">
+<text x="24" y="34" font-size="21" font-weight="700">Validation position error</text>
+<line x1="76" y1="70.0" x2="612" y2="70.0" stroke="#dce3ed"/>
+<text x="67" y="75.0" text-anchor="end" font-size="13">97</text>
+<line x1="76" y1="120.0" x2="612" y2="120.0" stroke="#dce3ed"/>
+<text x="67" y="125.0" text-anchor="end" font-size="13">72</text>
+<line x1="76" y1="170.0" x2="612" y2="170.0" stroke="#dce3ed"/>
+<text x="67" y="175.0" text-anchor="end" font-size="13">47</text>
+<line x1="76" y1="220.0" x2="612" y2="220.0" stroke="#dce3ed"/>
+<text x="67" y="225.0" text-anchor="end" font-size="13">22</text>
+<line x1="76" y1="270.0" x2="612" y2="270.0" stroke="#dce3ed"/>
+<text x="67" y="275.0" text-anchor="end" font-size="13">-2.9</text>
+<text x="76.0" y="293" text-anchor="middle" font-size="13">0</text>
+<text x="344.0" y="293" text-anchor="middle" font-size="13">1,000</text>
+<text x="612.0" y="293" text-anchor="middle" font-size="13">2,000</text>
+<polyline points="76.00,85.82 210.00,250.97 344.00,255.80 478.00,255.60 612.00,256.21" fill="none" stroke="#087f8c" stroke-width="2.6" stroke-linejoin="round"/>
+<circle cx="612.00" cy="256.21" r="4" fill="#087f8c"/>
+<text x="24" y="319" font-size="14" fill="#087f8c">ACT</text>
+<polyline points="76.00,83.79 210.00,243.85 344.00,252.34 478.00,253.41 612.00,255.79" fill="none" stroke="#c56a13" stroke-width="2.6" stroke-linejoin="round"/>
+<circle cx="612.00" cy="255.79" r="4" fill="#c56a13"/>
+<text x="254" y="319" font-size="14" fill="#c56a13">ACT + Flow</text>
+<text x="76" y="58" font-size="12">mm</text>
+</g></svg>
