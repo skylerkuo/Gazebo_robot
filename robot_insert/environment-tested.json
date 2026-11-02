@@ -1,0 +1,26 @@
+{
+  "recorded_on": "2026-11-02",
+  "python": "3.12.3",
+  "platform": "Ubuntu Linux / WSL2, CUDA 12.8",
+  "purpose": "Versions observed in the tested local environment, not a dependency lockfile or a fresh-install guarantee.",
+  "package_layout": "PyTorch in the workspace .venv; selected LeRobot and dataset packages in ignored tools directories.",
+  "dependency_note": "The local NumPy 1.26.4 setup is selectively installed; a full LeRobot 0.6.1 dependency resolution requests NumPy >=2.0.",
+  "packages": {
+    "torch": "2.11.0+cu128",
+    "torchvision": "0.26.0+cu128",
+    "lerobot": "0.6.1",
+    "datasets": "4.8.5",
+    "pyarrow": "23.0.1",
+    "numpy": "1.26.4",
+    "pandas": "2.3.3",
+    "scipy": "1.11.4",
+    "Pillow": "11.3.0",
+    "huggingface-hub": "1.33.0",
+    "hf-xet": "1.7.0",
+    "safetensors": "0.8.0",
+    "PyYAML": "6.0.3",
+    "pytest": "7.4.4",
+    "einops": "0.8.2",
+    "draccus": "0.11.6"
+  }
+}

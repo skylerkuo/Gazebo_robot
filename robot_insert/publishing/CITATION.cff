@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "Please cite this dataset and acknowledge the original ivogeorg dataset and the Intrinsic AIC project linked in README.md."
+type: dataset
+title: "AIC Cable Insertion — Gazebo (SFP0, Four Views)"
+authors:
+  - name: Kuoskyler
+date-released: 2026-10-30
+license: Apache-2.0
+url: "https://huggingface.co/datasets/Kuoskyler/aic-cable-insertion-gazebo-sfp0"

@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# One isolated official evaluator session with a four-view recording teacher.
+set -eo pipefail
+ulimit -c 0
+INSERT_RUN=$1
+INSERT_GUI=$2
+INSERT_WALL_TIMEOUT=${3:-1800}
+INSERT_OUTPUT="/workspace/results/$INSERT_RUN"
+source /ws_aic/install/setup.bash
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+export ZENOH_CONFIG_OVERRIDE='transport/shared_memory/enabled=false'
+export GZ_PARTITION="robot_insert_sideview_${INSERT_RUN}"
+export AIC_RESULTS_DIR="$INSERT_OUTPUT/scoring"
+export ROS_LOG_DIR="$INSERT_OUTPUT/ros_logs"
+mkdir -p "$AIC_RESULTS_DIR" "$ROS_LOG_DIR" "$INSERT_OUTPUT/raw"
+cleanup() {
+    trap - EXIT INT TERM
+    for INSERT_PID in "${INSERT_MODEL_PID:-}" "${INSERT_EVAL_PID:-}"; do
+        if [[ -n "$INSERT_PID" ]]; then kill -KILL -- "-$INSERT_PID" 2>/dev/null || true; fi
+    done
+    wait 2>/dev/null || true
+}
+trap cleanup EXIT INT TERM
+setsid /entrypoint.sh "gazebo_gui:=$INSERT_GUI" launch_rviz:=false \
+    ground_truth:=true start_aic_engine:=true shutdown_on_aic_engine_exit:=false \
+    model_discovery_timeout_seconds:=120 \
+    "world_file:=$INSERT_OUTPUT/sideview_world.sdf" \
+    "description_file:=$INSERT_OUTPUT/recording_robot.xacro" \
+    "ros_gz_bridge_config_file:=$INSERT_OUTPUT/bridge.yaml" \
+    "aic_engine_config_file:=$INSERT_OUTPUT/engine_config.yaml" \
+    > "$INSERT_OUTPUT/eval.log" 2>&1 &
+INSERT_EVAL_PID=$!
+sleep 3
+setsid env PYTHONPATH="/workspace/scripts:/workspace:${PYTHONPATH:-}" PYTHONDONTWRITEBYTECODE=1 \
+    SIDEVIEW_SETTINGS="$INSERT_OUTPUT/settings.json" \
+    ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=policies.CollectSFP \
+    > "$INSERT_OUTPUT/model.log" 2>&1 &
+INSERT_MODEL_PID=$!
+# The official Gazebo image aborts in its graphics destructor on this WSL host.
+# A piped WSL core handler can ignore ulimit -c 0 and write multi-GiB dumps on C:.
+# Wait for real successful engine exit + all score files, then kill our isolated
+# remaining processes without invoking that destructor. Incomplete runs fail closed.
+INSERT_STATUS=0
+python3 /workspace/scripts/sideview_engine_done.py "$INSERT_OUTPUT" \
+    --evaluator-pid "$INSERT_EVAL_PID" --model-pid "$INSERT_MODEL_PID" \
+    --timeout-seconds "$INSERT_WALL_TIMEOUT" \
+    > "$INSERT_OUTPUT/engine_monitor.log" 2>&1 || INSERT_STATUS=$?
+if [[ "$INSERT_STATUS" != 0 ]]; then
+    cat "$INSERT_OUTPUT/engine_monitor.log" >&2 || true
+fi
+printf '%s\n' "$INSERT_STATUS" > "$INSERT_OUTPUT/evaluator-exit-code.txt"
+exit "$INSERT_STATUS"

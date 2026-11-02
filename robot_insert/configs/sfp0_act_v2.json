@@ -1,0 +1,18 @@
+{
+  "index_path": "/mnt/d/robot_datasets/aic_sfp0_v2/index.json",
+  "output_dir": "/mnt/d/robot_models/aic_sfp0_act_v2",
+  "batch_size": 32,
+  "num_workers": 2,
+  "device": "cuda",
+  "amp": "bf16",
+  "steps": 30000,
+  "eval_samples": 1200,
+  "eval_every": 1000,
+  "save_every": 500,
+  "log_every": 50,
+  "learning_rate": 0.0001,
+  "backbone_lr": 0.00001,
+  "warmup_steps": 500,
+  "minimum_lr_ratio": 0.1,
+  "grad_clip_norm": 1.0
+}

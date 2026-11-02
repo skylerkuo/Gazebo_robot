@@ -1,0 +1,27 @@
+{
+  "format": "aic-sfp0-sideview-v1",
+  "seed": 42,
+  "fps": 20,
+  "real_time_factor": 0.5,
+  "record_width": 576,
+  "record_height": 512,
+  "camera_tolerance_s": 0.012,
+  "state_tolerance_s": 0.1,
+  "maximum_frame_gap_s": 0.076,
+  "minimum_frames": 400,
+  "camera": {
+    "position_world": [0.60, -0.60, 1.42],
+    "look_at_world": [0.15, -0.20, 1.27],
+    "width": 576,
+    "height": 512,
+    "horizontal_fov": 0.95,
+    "near": 0.04,
+    "far": 5.0
+  },
+  "variation": {
+    "board_x_m": 0.008,
+    "board_y_m": 0.008,
+    "board_z_m": 0.002,
+    "board_yaw_rad": 0.02
+  }
+}

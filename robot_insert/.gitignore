@@ -1,0 +1,28 @@
+upstream/
+runtime/
+tools/
+results/
+__pycache__/
+.pytest_cache/
+.cache/
+*.py[cod]
+*.log
+
+# Recorded data and trained models belong outside the source repository.
+*.parquet
+*.pt
+*.pth
+*.safetensors
+*.onnx
+*.npz
+*.images
+*.db3
+*.mcap
+
+# Local credentials and environment overrides.
+.env
+.env.*
+!.env.example
+token
+token.json
+credentials.json

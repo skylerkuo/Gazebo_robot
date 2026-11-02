@@ -1,0 +1,20 @@
+AIC Cable Insertion — Gazebo (SFP0, Four Views)
+Newly collected simulation trajectories and release curation by Kuoskyler, 2026.
+
+Acknowledged original community dataset:
+ivogeorg/aic-cable-insertion-gazebo-v3
+https://huggingface.co/datasets/ivogeorg/aic-cable-insertion-gazebo-v3
+Original dataset license: Apache-2.0.
+Its original data files are not included in this independently recollected release.
+
+Simulation environment, official controller and bundled AIC assets/description:
+https://github.com/intrinsic-dev/aic
+Revision 6546127c1c15d5786f59c91400f5fc5ad6894448
+Copyright notices are retained inside upstream source files. Apache License 2.0.
+
+Modifications/additions: fixed side-view recording configuration, control-source
+and intervention annotations, per-episode scene/calibration metadata and portable
+release packaging. The generated robot Xacro camera include was made relative.
+The bundled upstream source archive is unchanged; the full simulator and trained
+policy weights are not redistributed. No endorsement by the original author or
+the AIC organizers is implied.

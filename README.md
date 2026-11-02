@@ -1,3 +1,16 @@
+# AIC cable insertion code
+
+The collection, training and Gazebo inference code is in [robot_insert](robot_insert/README.md).
+It includes ACT, supervised Residual Flow, PACE experiments, tests and the dataset publishing tools.
+
+Dataset: [Kuoskyler/aic-cable-insertion-gazebo-sfp0](https://huggingface.co/datasets/Kuoskyler/aic-cable-insertion-gazebo-sfp0) — 261 episodes recorded with four RGB cameras and force/torque sensing.
+
+## Archived training snapshot
+
+The report below is from 2026-10-29. It does not show the current training state.
+
+---
+
 > 自動同步尚待電腦完成 GitHub 登入；目前顯示初始快照。
 
 # ACT＋Residual Flow 訓練狀態
@@ -62,3 +75,4 @@ ACT BC：**0.13408** · Flow 速度 MSE：**0.08174**
 這是定時上傳的快照，手機重新整理即可查看更新。日誌沒有更新不一定代表訓練停止。
 
 這個分支只包含指標與曲線，不包含資料集、模型權重或登入憑證。離線誤差不等於實際插入成功率。
+
