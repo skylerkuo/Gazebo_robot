@@ -26,3 +26,6 @@ __pycache__/
 token
 token.json
 credentials.json
+
+# Generated machine-specific configuration.
+/configs/local/
